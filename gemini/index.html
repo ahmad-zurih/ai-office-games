@@ -1,0 +1,2914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DSL Micro GP v2.0 — Data Science Lab Racer (University of Bern)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0b0f19;
+            font-family: 'Inter', sans-serif;
+        }
+        #canvas-container {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .hud-glass {
+            background: rgba(11, 15, 25, 0.84);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 12px 30px -6px rgba(0, 0, 0, 0.65);
+        }
+        .unibe-red {
+            background-color: #e4002b;
+        }
+        .game-btn {
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .game-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px -3px rgba(228, 0, 43, 0.5);
+        }
+        .game-btn:active {
+            transform: translateY(1px);
+        }
+        /* Interactive Key Cap Styling */
+        .key-cap {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 28px;
+            height: 26px;
+            padding: 0 6px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 800;
+            font-size: 11px;
+            color: #e2e8f0;
+            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+            border: 1px solid #475569;
+            border-bottom: 3px solid #334155;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+            transition: all 0.06s ease;
+        }
+        .key-cap.active {
+            background: linear-gradient(180deg, #22c55e 0%, #15803d 100%);
+            color: #ffffff;
+            border-color: #86efac;
+            border-bottom-width: 1px;
+            transform: translateY(2px);
+            box-shadow: 0 0 12px rgba(34, 197, 94, 0.75);
+        }
+        .key-cap-amber.active {
+            background: linear-gradient(180deg, #f59e0b 0%, #b45309 100%);
+            border-color: #fde68a;
+            box-shadow: 0 0 12px rgba(245, 158, 11, 0.8);
+        }
+        .key-cap-cyan.active {
+            background: linear-gradient(180deg, #06b6d4 0%, #0e7490 100%);
+            border-color: #a5f3fc;
+            box-shadow: 0 0 12px rgba(6, 182, 212, 0.8);
+        }
+        /* Touch Controls */
+        .touch-btn {
+            background: rgba(15, 23, 42, 0.78);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(6px);
+            touch-action: manipulation;
+        }
+        .touch-btn:active {
+            background: rgba(228, 0, 43, 0.8);
+            border-color: #fff;
+        }
+    </style>
+</head>
+<body class="text-white antialiased">
+
+    <!-- 3D WebGL Viewport -->
+    <div id="canvas-container"></div>
+
+    <!-- TOP HUD BAR -->
+    <div id="hud-layer" class="pointer-events-none fixed inset-x-0 top-0 z-20 p-2.5 sm:p-3.5 flex flex-wrap items-start justify-between gap-2">
+        <!-- Left: Brand + Lap, Gate & Next Target -->
+        <div class="flex flex-wrap items-center gap-2 pointer-events-auto">
+            <div class="hud-glass rounded-xl px-3 py-2 flex items-center gap-2.5 border-l-4 border-l-[#e4002b]">
+                <div class="w-9 h-9 rounded-lg unibe-red flex flex-col items-center justify-center font-black leading-none tracking-tighter shadow-md">
+                    <span class="text-[11px]">DSL</span>
+                    <span class="text-[8px] font-mono opacity-90">UNIBE</span>
+                </div>
+                <div>
+                    <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold flex items-center gap-1.5">
+                        <span>Data Science Lab GP v2</span>
+                        <span id="track-badge" class="px-1.5 py-0.5 text-[9px] rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono">FLOOR GP</span>
+                    </div>
+                    <div class="text-xs sm:text-sm font-extrabold tracking-tight text-white flex items-center gap-2.5 mt-0.5">
+                        <span>LAP <span id="hud-lap" class="text-red-400 mono">1/3</span></span>
+                        <span class="text-slate-600">|</span>
+                        <span>GATE <span id="hud-cp" class="text-emerald-400 mono">1/8</span></span>
+                        <span class="text-slate-600">|</span>
+                        <span>POS <span id="hud-pos" class="text-amber-300 mono">1st</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timers -->
+            <div class="hud-glass rounded-xl px-3 py-2 flex items-center gap-3">
+                <div>
+                    <div class="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Lap Time</div>
+                    <div id="hud-time" class="mono text-base sm:text-lg font-extrabold text-white">00:00.00</div>
+                </div>
+                <div class="h-6 w-[1px] bg-slate-700"></div>
+                <div>
+                    <div class="text-[9px] uppercase tracking-wider text-amber-400/90 font-semibold">Best Lap</div>
+                    <div id="hud-best" class="mono text-base sm:text-lg font-extrabold text-amber-300">--:--.--</div>
+                </div>
+            </div>
+
+            <!-- Next Checkpoint GPS Guidance Pill -->
+            <div class="hud-glass rounded-xl px-3 py-2 hidden lg:flex items-center gap-2.5 border border-emerald-500/30">
+                <div class="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300 font-black text-sm">
+                    ➤
+                </div>
+                <div>
+                    <div class="text-[9px] uppercase tracking-wider text-emerald-400 font-bold">Follow Green GPS Arrow To</div>
+                    <div class="text-xs font-bold text-white flex items-center gap-2">
+                        <span id="hud-next-gate-name">GATE 1: Coat Rack Start</span>
+                        <span id="hud-next-gate-dist" class="mono text-emerald-300 text-[11px]">(12m)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Notification Toast -->
+        <div id="landmark-toast" class="hud-glass rounded-full px-4 py-1.5 text-xs sm:text-sm font-bold text-emerald-200 border border-emerald-400/40 shadow-lg transition-all duration-300 opacity-0 -translate-y-3 pointer-events-none flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            <span id="landmark-text">Follow the glowing green arrows & red/white curbs!</span>
+        </div>
+
+        <!-- Right: Quick Action Buttons -->
+        <div class="flex flex-wrap items-center gap-1.5 pointer-events-auto">
+            <button id="btn-track" title="Switch Track Mode (T)" class="hud-glass game-btn rounded-xl px-2.5 py-2 text-xs font-bold flex items-center gap-1.5 text-amber-300 border-amber-500/30 hover:bg-slate-800/90">
+                <span>🛣️</span>
+                <span id="track-btn-label" class="hidden md:inline">Track: Floor GP (T)</span>
+            </button>
+            <button id="btn-camera" title="Cycle Camera View (C)" class="hud-glass game-btn rounded-xl px-2.5 py-2 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-800/90">
+                <span>🎥</span>
+                <span id="cam-label" class="hidden xl:inline">Chase Cam (C)</span>
+            </button>
+            <button id="btn-tour" title="Free-Fly Drone Camera (V)" class="hud-glass game-btn rounded-xl px-2.5 py-2 text-xs font-bold flex items-center gap-1.5 text-sky-300 border-sky-500/30 hover:bg-slate-800/90">
+                <span>🚁</span>
+                <span class="hidden md:inline">Drone (V)</span>
+            </button>
+            <button id="btn-help" title="Controls & Gameplay Instructions (H)" class="unibe-red game-btn rounded-xl px-3 py-2 text-xs font-extrabold flex items-center gap-1 shadow-lg">
+                <span>?</span>
+                <span>Controls (H)</span>
+            </button>
+            <button id="btn-audio" title="Toggle Engine Sound (M)" class="hud-glass game-btn rounded-xl px-2.5 py-2 text-xs font-bold hover:bg-slate-800/90">
+                <span id="audio-icon">🔊</span>
+            </button>
+            <button id="btn-download" title="Download Standalone HTML File" class="hud-glass game-btn rounded-xl px-2.5 py-2 text-xs font-bold text-emerald-300 border-emerald-500/30 hover:bg-slate-800/90">
+                <span>⬇</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- DRONE / OFFICE INSPECTION OVERLAY BANNER -->
+    <div id="drone-banner" class="hidden fixed top-16 left-1/2 -translate-x-1/2 z-20 hud-glass rounded-2xl px-5 py-3 border border-sky-400/50 text-center max-w-xl w-[94%] pointer-events-auto">
+        <div class="text-xs font-bold uppercase tracking-widest text-sky-400 mb-1">🚁 DSL Office Free-Fly Drone Camera (Press V to Return to Car)</div>
+        <p class="text-xs text-slate-200 mb-2">Inspect the realistic University of Bern Data Science Lab! Use <b>W A S D / Arrows</b> to fly, <b>Space / Shift</b> to go Up/Down, and <b>Click + Drag Mouse</b> to look around.</p>
+        <div class="flex flex-wrap justify-center gap-1.5 text-[11px]">
+            <button data-spot="entrance" class="spot-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-sky-600 font-semibold transition">1. Coat Rack & Yellow Vest</button>
+            <button data-spot="center" class="spot-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-sky-600 font-semibold transition">2. USM Haller & Clean Desk</button>
+            <button data-spot="closeup" class="spot-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-sky-600 font-semibold transition">3. Snail Mug & Stabilo Pens</button>
+            <button data-spot="lava" class="spot-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-sky-600 font-semibold transition">4. Lava Lamp & Lenovo Box</button>
+            <button data-spot="corner" class="spot-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-sky-600 font-semibold transition">5. P(D|H) Mug & Text Lab Poster</button>
+            <button id="btn-exit-drone" class="px-2.5 py-1 rounded-lg unibe-red font-bold transition">Return to Race (V)</button>
+        </div>
+    </div>
+
+    <!-- BOTTOM HUD: PERSISTENT LIVE KEYBOARD CONTROLS (LEFT) + TELEMETRY (CENTER) + 2D RADAR MINIMAP (RIGHT) -->
+    <div class="pointer-events-none fixed inset-x-0 bottom-0 z-20 p-2.5 sm:p-3.5 flex items-end justify-between gap-3">
+
+        <!-- Bottom-Left: ALWAYS-VISIBLE LIVE KEYBOARD DIAGRAM & INSTRUCTIONS -->
+        <div class="hud-glass rounded-2xl p-3 pointer-events-auto hidden md:flex flex-col gap-2 max-w-md border border-slate-700/80">
+            <div class="flex items-center justify-between border-b border-slate-700/80 pb-1.5">
+                <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    Live Keyboard Controls (Lights Up When Pressed)
+                </span>
+                <span class="text-[10px] text-slate-400 mono">Press [H] for Full Guide</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 items-center">
+                <!-- Left Column: WASD / Arrow Cluster -->
+                <div class="flex items-center gap-3 bg-slate-900/75 p-2 rounded-xl border border-slate-800">
+                    <div class="flex flex-col items-center gap-1">
+                        <div id="key-w" class="key-cap">W</div>
+                        <div class="flex gap-1">
+                            <div id="key-a" class="key-cap">A</div>
+                            <div id="key-s" class="key-cap">S</div>
+                            <div id="key-d" class="key-cap">D</div>
+                        </div>
+                    </div>
+                    <div class="text-[11px] leading-tight text-slate-200 space-y-0.5">
+                        <div><b class="text-white">W / ↑</b> : Gas / Forward</div>
+                        <div><b class="text-white">S / ↓</b> : Brake / Reverse</div>
+                        <div><b class="text-white">A D / ← →</b> : Steer Car</div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Drift & Nitro -->
+                <div class="flex flex-col gap-1.5 bg-slate-900/75 p-2 rounded-xl border border-slate-800 text-[11px]">
+                    <div class="flex items-center justify-between gap-2">
+                        <span id="key-space" class="key-cap key-cap-amber px-2.5">SPACE</span>
+                        <span class="text-amber-300 font-semibold text-right">Handbrake Drift</span>
+                    </div>
+                    <div class="flex items-center justify-between gap-2">
+                        <span id="key-shift" class="key-cap key-cap-cyan px-2.5">SHIFT</span>
+                        <span class="text-cyan-300 font-semibold text-right">CUDA Nitro Boost</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Row: Utility Hotkeys -->
+            <div class="grid grid-cols-5 gap-1.5 text-[10px] pt-0.5">
+                <button onclick="resetPlayerToCheckpoint()" class="bg-slate-900/90 hover:bg-slate-800 rounded-lg p-1.5 border border-slate-700/80 flex flex-col items-center gap-0.5 transition">
+                    <span id="key-r" class="key-cap">R</span>
+                    <span class="text-slate-300 font-semibold">Respawn</span>
+                </button>
+                <button onclick="cycleCamera()" class="bg-slate-900/90 hover:bg-slate-800 rounded-lg p-1.5 border border-slate-700/80 flex flex-col items-center gap-0.5 transition">
+                    <span id="key-c" class="key-cap">C</span>
+                    <span class="text-slate-300 font-semibold">Camera</span>
+                </button>
+                <button onclick="toggleTrackMode()" class="bg-slate-900/90 hover:bg-slate-800 rounded-lg p-1.5 border border-slate-700/80 flex flex-col items-center gap-0.5 transition">
+                    <span id="key-t" class="key-cap">T</span>
+                    <span class="text-amber-300 font-semibold">Track Mode</span>
+                </button>
+                <button onclick="toggleTrackGuides()" class="bg-slate-900/90 hover:bg-slate-800 rounded-lg p-1.5 border border-slate-700/80 flex flex-col items-center gap-0.5 transition">
+                    <span id="key-g" class="key-cap">G</span>
+                    <span class="text-emerald-300 font-semibold">Guides</span>
+                </button>
+                <button onclick="toggleDroneMode()" class="bg-slate-900/90 hover:bg-slate-800 rounded-lg p-1.5 border border-slate-700/80 flex flex-col items-center gap-0.5 transition">
+                    <span id="key-v" class="key-cap">V</span>
+                    <span class="text-sky-300 font-semibold">Drone Cam</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Touch Controls (Visible on small/touch screens) -->
+        <div class="flex md:hidden w-full justify-between items-end pointer-events-auto gap-2">
+            <div class="flex gap-1.5">
+                <button id="touch-left" class="touch-btn w-13 h-13 px-4 py-3 rounded-2xl text-lg font-black">◀</button>
+                <button id="touch-right" class="touch-btn w-13 h-13 px-4 py-3 rounded-2xl text-lg font-black">▶</button>
+            </div>
+            <div class="flex gap-1.5">
+                <button id="touch-drift" class="touch-btn px-2.5 h-13 rounded-2xl text-[11px] font-extrabold uppercase text-amber-300">Drift</button>
+                <button id="touch-boost" class="touch-btn px-2.5 h-13 rounded-2xl text-[11px] font-extrabold uppercase text-cyan-300">Boost</button>
+                <button id="touch-brake" class="touch-btn px-3 h-13 rounded-2xl text-xs font-bold">REV</button>
+                <button id="touch-gas" class="touch-btn px-4 h-14 rounded-2xl text-sm font-black unibe-red">GAS</button>
+            </div>
+        </div>
+
+        <!-- Bottom-Right: Speedometer + Boost + 2D Track & Gate Radar -->
+        <div class="flex items-end gap-2.5 ml-auto pointer-events-auto">
+            <!-- Speed & CUDA Nitro Telemetry -->
+            <div class="hud-glass rounded-2xl px-3.5 py-2.5 flex items-center gap-3.5">
+                <div class="w-28 sm:w-36">
+                    <div class="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider mb-1">
+                        <span class="text-cyan-400">⚡ CUDA Boost</span>
+                        <span id="hud-boost-pct" class="mono text-cyan-300">100%</span>
+                    </div>
+                    <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-700 p-0.5">
+                        <div id="hud-boost-bar" class="h-full rounded-full bg-gradient-to-r from-cyan-500 via-sky-300 to-white transition-all duration-75" style="width: 100%"></div>
+                    </div>
+                    <div id="surface-indicator" class="mt-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400 truncate">
+                        OAK PARQUET FLOOR
+                    </div>
+                </div>
+                <div class="h-10 w-[1px] bg-slate-700/80"></div>
+                <div class="text-right min-w-[64px]">
+                    <div id="hud-speed" class="mono text-2xl sm:text-3xl font-black tracking-tighter text-white leading-none">0</div>
+                    <div class="text-[9px] font-bold uppercase tracking-widest text-red-400 mt-0.5">km/h (RC)</div>
+                </div>
+            </div>
+
+            <!-- Live 2D Office & Track Radar Minimap -->
+            <div class="hud-glass rounded-2xl p-2 hidden sm:flex flex-col items-center border border-slate-700/80">
+                <div class="w-full flex items-center justify-between text-[9px] font-bold uppercase tracking-wider text-slate-300 mb-1 px-1">
+                    <span>Track Radar</span>
+                    <span class="text-emerald-400">● Next Gate</span>
+                </div>
+                <canvas id="minimap-canvas" width="185" height="145" class="rounded-lg bg-slate-950 border border-slate-700/80"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- WELCOME / INSTRUCTIONS & KEYBOARD GUIDE MODAL OVERLAY -->
+    <div id="modal-overlay" class="fixed inset-0 z-30 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+        <div class="hud-glass max-w-3xl w-full rounded-3xl p-5 sm:p-7 border border-white/20 shadow-2xl relative overflow-hidden my-auto">
+            <div class="absolute inset-x-0 top-0 h-2 bg-gradient-to-r from-[#e4002b] via-emerald-400 to-sky-400"></div>
+
+            <!-- Header -->
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl unibe-red flex flex-col items-center justify-center font-black shadow-lg">
+                        <span class="text-sm leading-none">DSL</span>
+                        <span class="text-[8px] font-mono tracking-wider">UNIBE</span>
+                    </div>
+                    <div>
+                        <span class="text-[11px] font-bold uppercase tracking-widest text-red-400">University of Bern • Data Science Lab</span>
+                        <h1 id="modal-title" class="text-xl sm:text-2xl font-black tracking-tight text-white">DSL MICRO GP v2.0 — REALISTIC OFFICE RACER</h1>
+                    </div>
+                </div>
+                <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">High-Realism + Guided Track</span>
+            </div>
+
+            <p id="modal-subtitle" class="text-slate-300 text-xs sm:text-sm leading-relaxed mb-4">
+                Race a 1:24 scale RC car inside a high-realism 3D replica of your <b>Data Science Lab</b> office! Follow the <b>Red & White FIA Curbs</b>, the <b>Animated Glowing Floor Chevrons</b>, and the <b>Floating Green 3D GPS Arrow</b> above your car through <b>Gates 1 to 8</b> for 3 laps.
+            </p>
+
+            <!-- How to Follow the Path + Track Selector -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                <div class="bg-emerald-950/40 border border-emerald-500/40 rounded-2xl p-3">
+                    <div class="text-xs font-extrabold uppercase tracking-wider text-emerald-300 mb-1">🧭 How to Follow the Track Path</div>
+                    <ul class="text-xs text-slate-200 space-y-1 list-disc list-inside">
+                        <li>Stay between the <b>Red & White Curbs</b> and follow the <b>Glowing Floor Arrows</b>.</li>
+                        <li>A <b>Green 3D Arrow</b> floats right above your car pointing directly at the next numbered <b>GATE (1/8 to 8/8)</b>.</li>
+                        <li>Stuck on a chair or cabinet? Press <kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-600 font-mono text-emerald-300">R</kbd> to respawn on the track!</li>
+                    </ul>
+                </div>
+
+                <div class="bg-slate-900/90 border border-slate-700/80 rounded-2xl p-3">
+                    <div class="text-xs font-extrabold uppercase tracking-wider text-amber-300 mb-1">🛣️ Choose Your Track Circuit</div>
+                    <p class="text-xs text-slate-300 mb-2">Switch anytime during gameplay with <kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-600 font-mono text-amber-300">T</kbd>:</p>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <button id="modal-track-floor" class="p-2 rounded-xl border border-emerald-400 bg-emerald-500/20 text-white font-bold text-left transition">
+                            <div>1. Floor Grand Prix</div>
+                            <div class="text-[10px] text-emerald-200 font-normal">Wide, smooth loop on the oak parquet floor (Default)</div>
+                        </button>
+                        <button id="modal-track-stunt" class="p-2 rounded-xl border border-slate-700 bg-slate-800/80 text-slate-300 font-bold text-left hover:border-amber-400 transition">
+                            <div>2. Desk Stunt GP</div>
+                            <div class="text-[10px] text-slate-400 font-normal">Jumps up LED ramp onto Clean Desk & P(D|H) Mug Desk!</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- COMPLETE KEYBOARD CONTROLS TABLE -->
+            <div class="bg-slate-900/95 rounded-2xl p-3.5 border border-slate-700/80 mb-5">
+                <div class="text-xs font-extrabold uppercase tracking-wider text-white mb-2.5 flex items-center justify-between">
+                    <span>⌨️ Complete Keyboard Controls Reference</span>
+                    <span class="text-[11px] font-normal text-slate-400">Always visible in the bottom-left HUD while driving</span>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                    <div class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800">
+                        <span class="key-cap">W</span><span class="key-cap">↑</span>
+                        <div>
+                            <div class="font-bold text-white">Accelerate</div>
+                            <div class="text-[10px] text-slate-400">Drive forward</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800">
+                        <span class="key-cap">S</span><span class="key-cap">↓</span>
+                        <div>
+                            <div class="font-bold text-white">Brake / Reverse</div>
+                            <div class="text-[10px] text-slate-400">Slow down or back up</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800">
+                        <span class="key-cap">A</span><span class="key-cap">D</span>
+                        <div>
+                            <div class="font-bold text-white">Steer Left / Right</div>
+                            <div class="text-[10px] text-slate-400">Or Left/Right Arrows</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800">
+                        <span class="key-cap px-2">SPACE</span>
+                        <div>
+                            <div class="font-bold text-amber-300">Handbrake Drift</div>
+                            <div class="text-[10px] text-slate-400">Hold to slide tight turns</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800">
+                        <span class="key-cap px-2">SHIFT</span>
+                        <div>
+                            <div class="font-bold text-cyan-300">CUDA Nitro Boost</div>
+                            <div class="text-[10px] text-slate-400">Extra speed burst</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800">
+                        <span class="key-cap">R</span>
+                        <div>
+                            <div class="font-bold text-emerald-300">Respawn Car</div>
+                            <div class="text-[10px] text-slate-400">Reset to last gate</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800">
+                        <span class="key-cap">C</span>
+                        <div>
+                            <div class="font-bold text-white">Camera View</div>
+                            <div class="text-[10px] text-slate-400">Chase / Hood / Overhead</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800">
+                        <span class="key-cap">T</span><span class="key-cap">G</span>
+                        <div>
+                            <div class="font-bold text-amber-300">Track / Guides</div>
+                            <div class="text-[10px] text-slate-400">Switch circuit / curbs</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800">
+                        <span class="key-cap">V</span><span class="key-cap">H</span>
+                        <div>
+                            <div class="font-bold text-sky-300">Drone / Help</div>
+                            <div class="text-[10px] text-slate-400">Inspect office / Controls</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-wrap gap-2.5">
+                    <button id="btn-start-race" class="unibe-red game-btn px-6 py-3 rounded-xl font-black text-sm uppercase tracking-wider shadow-lg flex items-center gap-2">
+                        <span>🏁 Start 3-Lap Race</span>
+                    </button>
+                    <button id="btn-start-timetrial" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 game-btn px-4 py-3 rounded-xl font-bold text-xs sm:text-sm text-white transition">
+                        ⏱️ Solo Time Trial
+                    </button>
+                    <button id="btn-start-tour" class="bg-sky-950/90 hover:bg-sky-900 border border-sky-500/40 game-btn px-4 py-3 rounded-xl font-bold text-xs sm:text-sm text-sky-200 transition">
+                        🚁 Inspect Office (Drone)
+                    </button>
+                </div>
+
+                <button id="btn-modal-download" class="text-xs font-bold text-emerald-300 hover:text-white underline flex items-center gap-1">
+                    <span>⬇ Download dsl_micro_gp_v2.html</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /****************************************************************************************
+         * DSL MICRO GP v2.0 — UNIVERSITY OF BERN DATA SCIENCE LAB RACER
+         * Upgrades:
+         * 1. High-Realism Graphics: ACESFilmicToneMapping, PMREM Metallic Environment Reflections,
+         *    high-res Oak Parquet with bump map, authentic USM Haller chrome/black cabinets with
+         *    keyholes & tent cards, Stabilo pens on monitor bases, Do🐌So highlighter cup,
+         *    Bayesian P(D|H) mug, matte-black water bottle, DSL Text Lab poster, Van Gogh &
+         *    Scream postcards, conference lanyards, wrought-iron window grille, and coat rack.
+         * 2. Crystal-Clear Track Path: Red/White FIA Curbs, Animated Glowing Chevron Ribbon,
+         *    Numbered Overhead Checkpoint Banners (GATE 1/8 - 8/8), 3D GPS Arrow above car,
+         *    and 2 selectable circuits (Floor Grand Prix vs. Desk Stunt Circuit).
+         * 3. Always-Visible Live Interactive Keyboard HUD + Full Controls Reference Modal.
+         ****************************************************************************************/
+
+        // --- WEB AUDIO SYNTHESIZER (Engine hum, turbo whine, tire screech, gate chimes) ---
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+                this.engineOsc = null;
+                this.engineGain = null;
+                this.screechGain = null;
+                this.initialized = false;
+            }
+            init() {
+                if (this.initialized) return;
+                try {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioCtx();
+
+                    this.engineOsc = this.ctx.createOscillator();
+                    this.engineOsc.type = 'sawtooth';
+                    this.engineOsc.frequency.value = 68;
+
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.value = 340;
+
+                    this.engineGain = this.ctx.createGain();
+                    this.engineGain.gain.value = 0.0;
+
+                    this.engineOsc.connect(filter);
+                    filter.connect(this.engineGain);
+                    this.engineGain.connect(this.ctx.destination);
+                    this.engineOsc.start();
+
+                    // Tire drift screech noise
+                    const bufferSize = this.ctx.sampleRate * 1.5;
+                    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    const output = noiseBuffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+
+                    const whiteNoise = this.ctx.createBufferSource();
+                    whiteNoise.buffer = noiseBuffer;
+                    whiteNoise.loop = true;
+
+                    const bandpass = this.ctx.createBiquadFilter();
+                    bandpass.type = 'bandpass';
+                    bandpass.frequency.value = 1150;
+                    bandpass.Q.value = 3.5;
+
+                    this.screechGain = this.ctx.createGain();
+                    this.screechGain.gain.value = 0.0;
+
+                    whiteNoise.connect(bandpass);
+                    bandpass.connect(this.screechGain);
+                    this.screechGain.connect(this.ctx.destination);
+                    whiteNoise.start();
+
+                    this.initialized = true;
+                } catch (e) {
+                    console.warn('AudioContext blocked or unsupported:', e);
+                }
+            }
+            updateMotor(speedRatio, isDrifting, isBoosting, active) {
+                if (!this.initialized || this.muted || !active) {
+                    if (this.engineGain) this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.08);
+                    if (this.screechGain) this.screechGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.08);
+                    return;
+                }
+                const now = this.ctx.currentTime;
+                const freq = 62 + Math.abs(speedRatio) * 215 + (isBoosting ? 95 : 0);
+                this.engineOsc.frequency.setTargetAtTime(freq, now, 0.05);
+                this.engineGain.gain.setTargetAtTime(0.03 + Math.min(0.055, Math.abs(speedRatio) * 0.045), now, 0.06);
+                const screech = (isDrifting && Math.abs(speedRatio) > 0.25) ? 0.04 : 0.0;
+                this.screechGain.gain.setTargetAtTime(screech, now, 0.05);
+            }
+            playChime(type = 'checkpoint') {
+                if (!this.initialized || this.muted) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                if (type === 'checkpoint') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(587.33, now);
+                    osc.frequency.setValueAtTime(880.0, now + 0.08);
+                    gain.gain.setValueAtTime(0.12, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+                    osc.start(now);
+                    osc.stop(now + 0.33);
+                } else if (type === 'lap') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, now);
+                    osc.frequency.setValueAtTime(659.25, now + 0.09);
+                    osc.frequency.setValueAtTime(783.99, now + 0.18);
+                    osc.frequency.setValueAtTime(1046.5, now + 0.27);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+                    osc.start(now);
+                    osc.stop(now + 0.66);
+                } else if (type === 'boost') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(240, now);
+                    osc.frequency.exponentialRampToValueAtTime(720, now + 0.22);
+                    gain.gain.setValueAtTime(0.09, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.26);
+                } else if (type === 'bump') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(105, now);
+                    osc.frequency.exponentialRampToValueAtTime(40, now + 0.11);
+                    gain.gain.setValueAtTime(0.09, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+                    osc.start(now);
+                    osc.stop(now + 0.13);
+                }
+            }
+        }
+        const sound = new SoundEngine();
+
+        // --- SCENE, RENDERER & REALISTIC ENVIRONMENT MAP SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x181c24);
+
+        const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.15, 260);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.08;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        container.appendChild(renderer.domElement);
+
+        // Generate a procedural indoor office reflection environment so USM Haller chrome & glossy black panels gleam realistically
+        function createOfficeEnvironmentMap() {
+            const envScene = new THREE.Scene();
+            envScene.background = new THREE.Color(0xd8d4c8);
+
+            // Warm ceiling bounce + cool window daylight panels + warm oak floor bounce
+            const ceilLight = new THREE.Mesh(
+                new THREE.PlaneGeometry(60, 60),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            ceilLight.position.y = 15;
+            ceilLight.rotation.x = Math.PI / 2;
+            envScene.add(ceilLight);
+
+            const floorBounce = new THREE.Mesh(
+                new THREE.PlaneGeometry(60, 60),
+                new THREE.MeshBasicMaterial({ color: 0x9b6734 })
+            );
+            floorBounce.position.y = -10;
+            floorBounce.rotation.x = -Math.PI / 2;
+            envScene.add(floorBounce);
+
+            // Bright window cards for specular highlights on chrome tubes
+            [[-25, 5, 0], [0, 5, -30], [25, 6, 10]].forEach(([x, y, z]) => {
+                const winLight = new THREE.Mesh(
+                    new THREE.BoxGeometry(4, 12, 12),
+                    new THREE.MeshBasicMaterial({ color: 0xe0f2fe })
+                );
+                winLight.position.set(x, y, z);
+                envScene.add(winLight);
+            });
+
+            const pmremGenerator = new THREE.PMREMGenerator(renderer);
+            pmremGenerator.compileCubemapShader();
+            const envRT = pmremGenerator.fromScene(envScene, 0.04);
+            scene.environment = envRT.texture;
+            pmremGenerator.dispose();
+        }
+        createOfficeEnvironmentMap();
+
+        // --- HIGH-RESOLUTION PROCEDURAL TEXTURES (FAITHFUL TO PHOTOS) ---
+        function createRealisticParquetTextures() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+
+            const bumpCanvas = document.createElement('canvas');
+            bumpCanvas.width = 1024;
+            bumpCanvas.height = 1024;
+            const bCtx = bumpCanvas.getContext('2d');
+
+            ctx.fillStyle = '#9e6835';
+            ctx.fillRect(0, 0, 1024, 1024);
+            bCtx.fillStyle = '#808080';
+            bCtx.fillRect(0, 0, 1024, 1024);
+
+            const rows = 16;
+            const cols = 6;
+            const w = 1024 / cols;
+            const h = 1024 / rows;
+            const oakPalette = ['#a9713c', '#986130', '#b47a44', '#8f5929', '#a36b37', '#ac743f'];
+
+            for (let r = 0; r < rows; r++) {
+                const stagger = (r % 3) * (w / 3);
+                for (let c = -1; c <= cols; c++) {
+                    const x = c * w + stagger;
+                    const y = r * h;
+                    const baseColor = oakPalette[(r * 5 + (c + 10) * 3) % oakPalette.length];
+
+                    ctx.fillStyle = baseColor;
+                    ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+
+                    // Plank bevel seam in bump map
+                    bCtx.strokeStyle = '#303030';
+                    bCtx.lineWidth = 2;
+                    bCtx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+
+                    // Fine oak wood grain fibers & knots
+                    ctx.strokeStyle = 'rgba(55, 28, 8, 0.16)';
+                    bCtx.strokeStyle = '#686868';
+                    ctx.lineWidth = 1.2;
+                    for (let g = 0; g < 9; g++) {
+                        const gy = y + 4 + (g / 9) * (h - 8);
+                        ctx.beginPath();
+                        bCtx.beginPath();
+                        ctx.moveTo(x + 2, gy);
+                        bCtx.moveTo(x + 2, gy);
+                        for (let s = 1; s <= 6; s++) {
+                            const gx = x + (s / 6) * (w - 4);
+                            const wave = Math.sin(s * 1.1 + r + g) * 2.2;
+                            ctx.lineTo(gx, gy + wave);
+                            bCtx.lineTo(gx, gy + wave);
+                        }
+                        ctx.stroke();
+                        bCtx.stroke();
+                    }
+                }
+            }
+
+            const colorTex = new THREE.CanvasTexture(canvas);
+            colorTex.wrapS = THREE.RepeatWrapping;
+            colorTex.wrapT = THREE.RepeatWrapping;
+            colorTex.repeat.set(5, 6);
+            colorTex.anisotropy = 8;
+
+            const bumpTex = new THREE.CanvasTexture(bumpCanvas);
+            bumpTex.wrapS = THREE.RepeatWrapping;
+            bumpTex.wrapT = THREE.RepeatWrapping;
+            bumpTex.repeat.set(5, 6);
+
+            return { colorTex, bumpTex };
+        }
+
+        function createPlasterWallTexture(hexColor) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = hexColor;
+            ctx.fillRect(0, 0, 256, 256);
+
+            // Subtle painted masonry plaster stipple
+            for (let i = 0; i < 4000; i++) {
+                const x = Math.random() * 256;
+                const y = Math.random() * 256;
+                ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.035)';
+                ctx.fillRect(x, y, 2, 2);
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(6, 3);
+            return tex;
+        }
+
+        function createWhiteboardTexture(variant = 'back') {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, 1024, 512);
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 10;
+            ctx.strokeRect(5, 5, 1014, 502);
+
+            if (variant === 'back') {
+                // Media (6) & (7): Left column of black/white QR-like sticky cards + handwriting & marker tray
+                ctx.fillStyle = '#1e293b';
+                for (let x = 28; x < 210; x += 22) {
+                    for (let y = 30; y < 460; y += 22) {
+                        if (Math.sin(x * 0.7 + y * 1.3) > -0.15) {
+                            ctx.fillRect(x, y, 15, 15);
+                        }
+                    }
+                }
+                ctx.font = 'bold 28px monospace';
+                ctx.fillStyle = '#0f172a';
+                ctx.fillText('DSL Research Sprint — University of Bern', 260, 70);
+                ctx.font = '22px monospace';
+                ctx.fillStyle = '#1d4ed8';
+                ctx.fillText('L(θ) = E_q[log p(x|z)] - KL(q(z|x) || p(z))', 260, 130);
+
+                // Handwritten flow boxes
+                ctx.strokeStyle = '#e11d48';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(270, 180, 210, 110);
+                ctx.fillStyle = '#e11d48';
+                ctx.fillText('Text Corpus ->', 290, 240);
+
+                ctx.strokeStyle = '#059669';
+                ctx.beginPath();
+                ctx.arc(640, 235, 65, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.fillStyle = '#059669';
+                ctx.fillText('Latent GNN', 582, 242);
+
+                // Coloured magnets & marker holder on bottom right
+                ['#ef4444', '#3b82f6', '#10b981', '#f59e0b'].forEach((c, i) => {
+                    ctx.fillStyle = c;
+                    ctx.fillRect(940, 320 + i * 32, 42, 18);
+                });
+            } else {
+                // Right yellow wall whiteboard (Media 7 & 8)
+                ctx.fillStyle = '#b91c1c';
+                ctx.font = 'bold 30px sans-serif';
+                ctx.fillText('DSL Architecture & Evaluation Pipeline', 55, 70);
+                ctx.strokeStyle = '#334155';
+                ctx.lineWidth = 3;
+                ['1. Ingest', '2. Embeddings', '3. Fine-Tune', '4. Benchmark'].forEach((label, i) => {
+                    ctx.strokeRect(60 + i * 230, 140, 190, 95);
+                    ctx.fillStyle = '#1e293b';
+                    ctx.font = '20px monospace';
+                    ctx.fillText(label, 80 + i * 230, 195);
+                });
+                ctx.strokeStyle = '#2563eb';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(70, 380);
+                ctx.bezierCurveTo(280, 260, 580, 440, 930, 300);
+                ctx.stroke();
+            }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createDSLPosterTexture() {
+            // Exact match for Media (2).jpg: "TEXT LAB" & "DATA SOVEREIGNTY & SECURITY" poster with red DSL logo
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 680;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 512, 680);
+
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'bold 22px sans-serif';
+            ctx.fillText('TEXT LAB', 28, 46);
+            ctx.fillText('DATA SOVEREIGNTY & SECURITY', 195, 46);
+
+            ctx.fillStyle = '#475569';
+            for (let y = 70; y < 230; y += 16) {
+                ctx.fillRect(28, y, 145, 6);
+                ctx.fillRect(200, y, 275, 6);
+            }
+
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'bold 18px sans-serif';
+            ctx.fillText('THE TECHNOLOGY', 28, 275);
+            ctx.fillText('FOUNDATION', 28, 296);
+            ctx.fillText('AVAILABLE TOOLS', 260, 275);
+
+            // 3D Isometric Red/Grey Stack Diagram on left
+            const layers = ['#7f1d1d', '#b91c1c', '#dc2626', '#64748b'];
+            layers.forEach((col, idx) => {
+                const ly = 335 + idx * 58;
+                ctx.fillStyle = col;
+                ctx.beginPath();
+                ctx.moveTo(85, ly);
+                ctx.lineTo(155, ly + 22);
+                ctx.lineTo(85, ly + 44);
+                ctx.lineTo(15, ly + 22);
+                ctx.closePath();
+                ctx.fill();
+            });
+
+            // Tool icons grid on right
+            for (let r = 0; r < 3; r++) {
+                for (let c = 0; c < 2; c++) {
+                    ctx.strokeStyle = '#cbd5e1';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(260 + c * 115, 315 + r * 75, 95, 55);
+                    ctx.fillStyle = '#e4002b';
+                    ctx.fillRect(272 + c * 115, 328 + r * 75, 22, 22);
+                }
+            }
+
+            // Red DSL Badge at bottom left
+            ctx.fillStyle = '#e4002b';
+            ctx.fillRect(28, 595, 86, 48);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 30px sans-serif';
+            ctx.fillText('DSL', 40, 630);
+
+            ctx.fillStyle = '#334155';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.fillText('SUPPORT: Data Science Lab', 135, 615);
+            ctx.font = '14px sans-serif';
+            ctx.fillText('University of Bern • dsl.unibe.ch', 135, 638);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createPostcardTexture(type) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 192;
+            const ctx = canvas.getContext('2d');
+
+            if (type === 'vangogh') {
+                // Van Gogh Cafe Terrace at Night (Yellow awning on left, starry blue sky on right, Media 2)
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, 256, 192);
+                ctx.fillStyle = '#1e3a8a';
+                ctx.fillRect(12, 12, 232, 168);
+                ctx.fillStyle = '#facc15';
+                ctx.beginPath();
+                ctx.moveTo(12, 12);
+                ctx.lineTo(145, 55);
+                ctx.lineTo(125, 180);
+                ctx.lineTo(12, 180);
+                ctx.fill();
+                ctx.fillStyle = '#fde047';
+                for (let i = 0; i < 12; i++) {
+                    ctx.beginPath();
+                    ctx.arc(150 + (i * 23) % 85, 25 + (i * 19) % 70, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            } else if (type === 'scream') {
+                // Edvard Munch The Scream (Orange/red swirling sky, dark bridge, figure, Media 2)
+                ctx.fillStyle = '#ea580c';
+                ctx.fillRect(0, 0, 256, 192);
+                ctx.fillStyle = '#dc2626';
+                ctx.fillRect(0, 20, 256, 45);
+                ctx.fillStyle = '#1e293b';
+                ctx.beginPath();
+                ctx.moveTo(0, 90);
+                ctx.lineTo(256, 165);
+                ctx.lineTo(256, 192);
+                ctx.lineTo(0, 192);
+                ctx.fill();
+                ctx.fillStyle = '#fde68a';
+                ctx.beginPath();
+                ctx.arc(135, 118, 22, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                // Minimalist line-art owl sketch card (Media 2)
+                ctx.fillStyle = '#f8fafc';
+                ctx.fillRect(0, 0, 256, 192);
+                ctx.strokeStyle = '#334155';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.arc(128, 96, 48, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(112, 82, 10, 0, Math.PI * 2);
+                ctx.arc(144, 82, 10, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createMugTexture(type = 'pdh') {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, 512, 256);
+
+            if (type === 'pdh') {
+                // White Bayesian P(D|H) mug from Media (2).jpg
+                ctx.fillStyle = '#0f172a';
+                ctx.font = 'bold 82px Georgia, serif';
+                ctx.fillText('P(D|H)', 105, 155);
+            } else {
+                // White mug with red snail logo "Do 🐌 So" from Media (5).jpg
+                ctx.fillStyle = '#dc2626';
+                ctx.font = 'bold 54px sans-serif';
+                ctx.fillText('Do      So', 110, 165);
+                ctx.strokeStyle = '#1e293b';
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.arc(245, 140, 32, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(245, 140, 16, 0, Math.PI * 1.5);
+                ctx.stroke();
+            }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createTentCardTexture(nameText = 'Peter') {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 256, 128);
+            ctx.fillStyle = '#e4002b';
+            ctx.fillRect(16, 42, 42, 32);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.fillText('DSL', 21, 64);
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'bold 22px sans-serif';
+            ctx.fillText(nameText, 76, 66);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createOutdoorWindowTexture(withGrille = false) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            // Bern daylight sky + green trees + neighboring facade
+            const grad = ctx.createLinearGradient(0, 0, 0, 512);
+            grad.addColorStop(0, '#bae6fd');
+            grad.addColorStop(0.55, '#e0f2fe');
+            grad.addColorStop(1, '#dcfce7');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 512, 512);
+
+            // Soft foliage & building silhouettes outside window
+            ctx.fillStyle = '#4ade80';
+            for (let i = 0; i < 18; i++) {
+                ctx.beginPath();
+                ctx.arc(60 + (i * 47) % 420, 220 + (i * 31) % 240, 45, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.fillStyle = '#15803d';
+            for (let i = 0; i < 14; i++) {
+                ctx.beginPath();
+                ctx.arc(40 + (i * 53) % 430, 260 + (i * 29) % 220, 38, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // White window mullions
+            ctx.strokeStyle = '#f8fafc';
+            ctx.lineWidth = 22;
+            ctx.strokeRect(0, 0, 512, 512);
+            ctx.beginPath();
+            ctx.moveTo(256, 0);
+            ctx.lineTo(256, 512);
+            ctx.stroke();
+
+            // Wrought-iron security grillwork seen in Media (8).jpg
+            if (withGrille) {
+                ctx.strokeStyle = '#334155';
+                ctx.lineWidth = 5;
+                for (let x = 48; x < 480; x += 48) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 12);
+                    ctx.lineTo(x, 500);
+                    ctx.stroke();
+                    for (let y = 64; y < 460; y += 80) {
+                        ctx.beginPath();
+                        ctx.arc(x, y, 16, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                }
+            }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // Animated Chevron Racing Line Texture
+        function createChevronTrackTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = 'rgba(16, 185, 129, 0.14)';
+            ctx.fillRect(0, 0, 256, 256);
+
+            // Side neon border lines
+            ctx.fillStyle = '#10b981';
+            ctx.fillRect(0, 0, 14, 256);
+            ctx.fillRect(242, 0, 14, 256);
+
+            // Bright forward chevron arrows
+            ctx.strokeStyle = '#34d399';
+            ctx.lineWidth = 18;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            [75, 195].forEach(yOff => {
+                ctx.beginPath();
+                ctx.moveTo(55, yOff + 35);
+                ctx.lineTo(128, yOff - 30);
+                ctx.lineTo(201, yOff + 35);
+                ctx.stroke();
+            });
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+        const chevronRibbonTex = createChevronTrackTexture();
+
+        // --- LIGHTING SETUP (Warm Wall Sconces + Daylight Windows) ---
+        const hemiLight = new THREE.HemisphereLight(0xfffbeb, 0x7c5836, 0.65);
+        scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xfffdf5, 0.88);
+        dirLight.position.set(-16, 30, -10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 1;
+        dirLight.shadow.camera.far = 95;
+        const shadowD = 38;
+        dirLight.shadow.camera.left = -shadowD;
+        dirLight.shadow.camera.right = shadowD;
+        dirLight.shadow.camera.top = shadowD;
+        dirLight.shadow.camera.bottom = -shadowD;
+        dirLight.shadow.bias = -0.0005;
+        scene.add(dirLight);
+
+        // Warm linear wall sconce lights matching the yellow wall uplights in Media (7) & (8)
+        const sconceCoords = [
+            [-23.5, 9.6, -14], [-23.5, 9.6, 10],
+            [23.5, 9.6, -16], [23.5, 9.6, 2], [23.5, 9.6, 18]
+        ];
+        sconceCoords.forEach(([x, y, z]) => {
+            const light = new THREE.PointLight(0xffdd88, 0.62, 26);
+            light.position.set(x, y, z);
+            scene.add(light);
+
+            // Physical white linear wall sconce fixture
+            const fixture = new THREE.Mesh(
+                new THREE.BoxGeometry(0.45, 0.22, 4.2),
+                new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffe49e, emissiveIntensity: 0.7 })
+            );
+            fixture.position.set(x > 0 ? 24.55 : -24.55, y, z);
+            scene.add(fixture);
+        });
+
+        // --- COLLISION & ELEVATION ZONES ---
+        const DESK_HEIGHT = 3.2;
+        const colliders = [];
+        const surfaceZones = [];
+        const boostPads = [];
+        const animatedProps = [];
+
+        function addBoxCollider(x, z, w, d, minY = 0, maxY = 10, label = '') {
+            colliders.push({
+                minX: x - w / 2,
+                maxX: x + w / 2,
+                minZ: z - d / 2,
+                maxZ: z + d / 2,
+                minY,
+                maxY,
+                label
+            });
+        }
+
+        // --- BUILD THE REALISTIC UNIVERSITY OF BERN DATA SCIENCE LAB OFFICE ---
+        function buildDSLOffice() {
+            // 1. REALISTIC OAK PARQUET FLOOR
+            const parquet = createRealisticParquetTextures();
+            const floorMat = new THREE.MeshStandardMaterial({
+                map: parquet.colorTex,
+                bumpMap: parquet.bumpTex,
+                bumpScale: 0.04,
+                roughness: 0.30,
+                metalness: 0.06
+            });
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(50, 64), floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // 2. RIBBED CONCRETE CEILING, ACOUSTIC BAFFLES, WIFI AP & PROJECTOR (Y = 14.5)
+            const ceilingMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.85 });
+            const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(50, 64), ceilingMat);
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.y = 14.5;
+            scene.add(ceiling);
+
+            for (let z = -30; z <= 30; z += 3.2) {
+                const rib = new THREE.Mesh(new THREE.BoxGeometry(50, 0.65, 0.42), ceilingMat);
+                rib.position.set(0, 14.18, z);
+                scene.add(rib);
+            }
+            // Suspended acoustic panels
+            [-11, 7].forEach(zPos => {
+                const panel = new THREE.Mesh(
+                    new THREE.BoxGeometry(28, 0.16, 10.5),
+                    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55 })
+                );
+                panel.position.set(0, 13.25, zPos);
+                scene.add(panel);
+            });
+            // Ceiling Projector (Media 6, 7, 8)
+            const projector = new THREE.Mesh(
+                new THREE.BoxGeometry(2.1, 0.68, 1.8),
+                new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.35, metalness: 0.3 })
+            );
+            projector.position.set(0, 12.75, -4.5);
+            scene.add(projector);
+
+            // White Ceiling Wi-Fi Access Point with Glowing Blue LED (Media 8 top-right)
+            const wifiAP = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.65, 0.65, 0.18, 20),
+                new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 })
+            );
+            wifiAP.position.set(4.5, 13.12, 8.5);
+            scene.add(wifiAP);
+            const blueLED = new THREE.Mesh(
+                new THREE.SphereGeometry(0.09, 8, 8),
+                new THREE.MeshBasicMaterial({ color: 0x3b82f6 })
+            );
+            blueLED.position.set(4.5, 13.0, 8.5);
+            scene.add(blueLED);
+
+            // Galvanized Metal Cable Trays along top of side walls (Media 7 & 8)
+            const trayMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.8, roughness: 0.25 });
+            [-24.2, 24.2].forEach(xPos => {
+                const tray = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.22, 62), trayMat);
+                tray.position.set(xPos, 11.4, 0);
+                scene.add(tray);
+            });
+
+            // 3. WALLS (Warm Yellow Plaster Side Walls + Cool Grey Plaster End Walls)
+            const yellowWallMat = new THREE.MeshStandardMaterial({
+                map: createPlasterWallTexture('#e9dfb4'),
+                roughness: 0.78
+            });
+            const greyWallMat = new THREE.MeshStandardMaterial({
+                map: createPlasterWallTexture('#c6cbd1'),
+                roughness: 0.78
+            });
+
+            const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.6, 14.5, 64), yellowWallMat);
+            leftWall.position.set(-25, 7.25, 0);
+            leftWall.receiveShadow = true;
+            scene.add(leftWall);
+
+            const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.6, 14.5, 64), yellowWallMat);
+            rightWall.position.set(25, 7.25, 0);
+            rightWall.receiveShadow = true;
+            scene.add(rightWall);
+
+            const backWall = new THREE.Mesh(new THREE.BoxGeometry(50, 14.5, 0.6), greyWallMat);
+            backWall.position.set(0, 7.25, -32);
+            backWall.receiveShadow = true;
+            scene.add(backWall);
+
+            const frontWall = new THREE.Mesh(new THREE.BoxGeometry(50, 14.5, 0.6), greyWallMat);
+            frontWall.position.set(0, 7.25, 32);
+            frontWall.receiveShadow = true;
+            scene.add(frontWall);
+
+            // 4. WINDOWS, RED CASEMENT WINDOW, RADIATORS, WHITEBOARDS & GLASS ENTRANCE DOOR
+            const whiteFrameMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 });
+            const radiatorMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.5, roughness: 0.4 });
+
+            // Far Back Wall Window (Z = -31.6) + Dark Radiator underneath (Media 6 & 7)
+            const backWinFrame = new THREE.Mesh(new THREE.BoxGeometry(8.6, 6.2, 0.45), whiteFrameMat);
+            backWinFrame.position.set(0, 8.2, -31.6);
+            scene.add(backWinFrame);
+            const backWinPane = new THREE.Mesh(
+                new THREE.BoxGeometry(7.6, 5.2, 0.5),
+                new THREE.MeshBasicMaterial({ map: createOutdoorWindowTexture(false) })
+            );
+            backWinPane.position.set(0, 8.2, -31.6);
+            scene.add(backWinPane);
+
+            // Front Wall Window with Wrought-Iron Security Grille (Z = +31.6, Media 8) + Radiator
+            const frontWinFrame = new THREE.Mesh(new THREE.BoxGeometry(8.6, 6.2, 0.45), whiteFrameMat);
+            frontWinFrame.position.set(-4.0, 8.4, 31.6);
+            scene.add(frontWinFrame);
+            const frontWinPane = new THREE.Mesh(
+                new THREE.BoxGeometry(7.6, 5.2, 0.5),
+                new THREE.MeshBasicMaterial({ map: createOutdoorWindowTexture(true) })
+            );
+            frontWinPane.position.set(-4.0, 8.4, 31.6);
+            scene.add(frontWinPane);
+
+            const frontRadiator = new THREE.Mesh(new THREE.BoxGeometry(6.8, 2.2, 0.45), radiatorMat);
+            frontRadiator.position.set(-3.5, 1.4, 31.45);
+            scene.add(frontRadiator);
+
+            // Left Yellow Wall Recessed Windows + Open RED Casement Window Frame (Media 6 & 7)
+            [-14.5, 3.5].forEach((zPos, idx) => {
+                const recess = new THREE.Mesh(new THREE.BoxGeometry(0.55, 6.4, 8.8), whiteFrameMat);
+                recess.position.set(-24.6, 8.2, zPos);
+                scene.add(recess);
+                const pane = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.6, 5.4, 7.8),
+                    new THREE.MeshBasicMaterial({ map: createOutdoorWindowTexture(false) })
+                );
+                pane.position.set(-24.6, 8.2, zPos);
+                scene.add(pane);
+
+                if (idx === 1) {
+                    // Distinctive Open Red-Framed Casement Window swinging into the room!
+                    const redFrame = new THREE.Mesh(
+                        new THREE.BoxGeometry(2.8, 5.1, 0.22),
+                        new THREE.MeshStandardMaterial({ color: 0xc81e32, roughness: 0.35 })
+                    );
+                    redFrame.position.set(-23.2, 8.2, zPos + 2.4);
+                    redFrame.rotation.y = -0.38;
+                    scene.add(redFrame);
+                }
+            });
+
+            // Tall Silver Floor-Standing Uplighter Lamps (Media 6, 7, 8)
+            [[-22.8, -4.5], [14.5, -24.5], [-10.5, 29.8]].forEach(([lx, lz]) => {
+                const lampPole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 7.8, 10), trayMat);
+                lampPole.position.set(lx, 3.9, lz);
+                scene.add(lampPole);
+                const lampHead = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.14, 0.9), trayMat);
+                lampHead.position.set(lx, 7.8, lz);
+                scene.add(lampHead);
+            });
+
+            // Back-left Whiteboard & Right-wall Whiteboard
+            const wbBack = new THREE.Mesh(
+                new THREE.BoxGeometry(11.5, 5.4, 0.2),
+                new THREE.MeshBasicMaterial({ map: createWhiteboardTexture('back') })
+            );
+            wbBack.position.set(-14.0, 7.6, -31.5);
+            scene.add(wbBack);
+
+            const wbRight = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, 5.6, 13.5),
+                new THREE.MeshBasicMaterial({ map: createWhiteboardTexture('right') })
+            );
+            wbRight.position.set(24.55, 7.6, -5.0);
+            scene.add(wbRight);
+
+            // Glass Hallway Entrance Door & Bright Blue Hallway Door outside (Media 8)
+            const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(0.5, 10.5, 6.8), trayMat);
+            doorFrame.position.set(24.65, 5.25, 24.5);
+            scene.add(doorFrame);
+            const hallwayFloor = new THREE.Mesh(
+                new THREE.BoxGeometry(0.55, 9.8, 6.0),
+                new THREE.MeshBasicMaterial({ color: 0x334155 })
+            );
+            hallwayFloor.position.set(24.6, 5.1, 24.5);
+            scene.add(hallwayFloor);
+            const blueHallDoor = new THREE.Mesh(
+                new THREE.BoxGeometry(0.6, 8.2, 2.9),
+                new THREE.MeshBasicMaterial({ color: 0x0284c7 })
+            );
+            blueHallDoor.position.set(24.55, 4.4, 25.4);
+            scene.add(blueHallDoor);
+
+            // 5. COAT RACK WITH DARK JACKET & NEON YELLOW HIGH-VIS VEST (Media 8)
+            buildCoatRack(22.2, 18.2);
+
+            // 6. SWISS USM HALLER MODULAR CABINETS (Glossy Black Panels + Gleaming Chrome Tubes/Joints + Keyholes)
+            // Central USM Haller Divider ("DSL | Peter" tent card, Media 6, 7, 8)
+            buildUSMCabinet(-5.5, 9.0, 2.2, 11.2, 4.3, true, 'Peter');
+            // Back-left USM Haller Cabinet holding the Lava Lamp & Red Thermos (Media 6, 7)
+            buildUSMCabinet(-8.5, -18.5, 2.2, 8.8, 4.3, false, '');
+            // Far Back Wall 3-tier USM Cabinet under window (Media 6, 7)
+            buildUSMCabinet(-0.5, -29.2, 4.2, 2.2, 4.1, false, '');
+            // Right Wall USM Haller Credenza near Coat Rack (Media 8)
+            buildUSMCabinet(22.2, 6.5, 2.2, 13.5, 3.8, false, '');
+            // Front-left USM Haller Divider next to the P(D|H) Mug Desk (Media 2, 8)
+            buildUSMCabinet(-14.5, 19.5, 2.2, 9.2, 4.2, true, 'DSL Lab');
+
+            // 7. LAVA LAMP & RED THERMOS ON BACK-LEFT USM CABINET (Media 6)
+            buildLavaLamp(-8.5, 4.3, -15.0);
+
+            // 8. LEFT WORKSTATION DESKS & ROLLING MESH CHAIRS
+            buildDetailedWorkstation(-13.5, 8.5, 8.2, 8.8, false);
+            buildDetailedWorkstation(-15.5, -17.5, 8.6, 7.2, false);
+
+            // Ergonomic black mesh rolling chairs positioned neatly so the Floor GP track corridor is wide & clear
+            buildOfficeChair(-18.2, 8.5, 0.8);
+            buildOfficeChair(4.2, -10.5, -0.6);
+            buildOfficeChair(4.2, 1.5, -1.2);
+            buildOfficeChair(-11.8, -17.5, 0.4);
+            buildOfficeChair(-8.5, 27.5, 2.4);
+
+            // 9. ELEVATED DESK STUNT SECTOR + CLOSE-UP PHOTO PROPS (Snail Mug, Stabilo Pens, P(D|H) Mug, DSL Text Lab Poster)
+            buildDeskStuntCourseAndProps();
+        }
+
+        function buildCoatRack(x, z) {
+            const group = new THREE.Group();
+            const chromeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.95, roughness: 0.08 });
+            const baseMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.5 });
+
+            const base = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 1.45, 0.24, 24), baseMat);
+            base.position.y = 0.12;
+            group.add(base);
+
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 7.3, 16), chromeMat);
+            pole.position.y = 3.65;
+            group.add(pole);
+
+            // Top crown hooks
+            for (let i = 0; i < 4; i++) {
+                const hook = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.9, 8), chromeMat);
+                hook.position.set(Math.cos(i * Math.PI / 2) * 0.35, 7.1, Math.sin(i * Math.PI / 2) * 0.35);
+                hook.rotation.z = Math.cos(i * Math.PI / 2) * 0.6;
+                group.add(hook);
+            }
+
+            // Dark Navy Jacket hanging on left
+            const jacket = new THREE.Mesh(
+                new THREE.ConeGeometry(0.92, 3.4, 12),
+                new THREE.MeshStandardMaterial({ color: 0x172554, roughness: 0.75 })
+            );
+            jacket.position.set(-0.45, 5.0, 0.35);
+            jacket.rotation.z = 0.12;
+            group.add(jacket);
+
+            // Bright Neon Yellow High-Vis Safety Vest with Reflective Silver Stripes (Media 8)
+            const vestMat = new THREE.MeshStandardMaterial({
+                color: 0xfacc15,
+                emissive: 0xca8a04,
+                emissiveIntensity: 0.28,
+                roughness: 0.4
+            });
+            const vest = new THREE.Mesh(new THREE.ConeGeometry(0.86, 3.1, 12), vestMat);
+            vest.position.set(0.35, 5.1, -0.45);
+            vest.rotation.z = -0.1;
+            group.add(vest);
+
+            [4.4, 4.9].forEach(sy => {
+                const stripe = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.58, 0.68, 0.2, 12),
+                    new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.8, roughness: 0.2 })
+                );
+                stripe.position.set(0.35, sy, -0.45);
+                group.add(stripe);
+            });
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+            addBoxCollider(x, z, 2.6, 2.6, 0, 8, 'Coat Rack & Yellow High-Vis Vest');
+        }
+
+        function buildUSMCabinet(x, z, w, d, h, hasNameTent = false, tentLabel = 'Peter') {
+            const group = new THREE.Group();
+            const blackPanelMat = new THREE.MeshStandardMaterial({
+                color: 0x121316,
+                roughness: 0.16,
+                metalness: 0.35
+            });
+            const chromeMat = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                metalness: 0.96,
+                roughness: 0.05
+            });
+
+            const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), blackPanelMat);
+            body.position.y = h / 2 + 0.18;
+            body.castShadow = true;
+            body.receiveShadow = true;
+            group.add(body);
+
+            // Chrome tubular grid (3 vertical bays along length)
+            const zStops = [-d / 2, 0, d / 2];
+            const xStops = [-w / 2, w / 2];
+            const yStops = [0.18, h * 0.36 + 0.18, h * 0.68 + 0.18, h + 0.18];
+
+            xStops.forEach(cx => {
+                zStops.forEach(cz => {
+                    const vTube = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, h + 0.12, 12), chromeMat);
+                    vTube.position.set(cx, h / 2 + 0.12, cz);
+                    group.add(vTube);
+
+                    yStops.forEach(cy => {
+                        const ball = new THREE.Mesh(new THREE.SphereGeometry(0.135, 14, 14), chromeMat);
+                        ball.position.set(cx, cy, cz);
+                        group.add(ball);
+                    });
+                });
+            });
+
+            // Horizontal chrome rails & silver keyholes on compartments (Media 6, 7, 8)
+            yStops.forEach(ry => {
+                const railFrame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.09, 0.08, d + 0.09), chromeMat);
+                railFrame.position.y = ry;
+                group.add(railFrame);
+            });
+
+            // Silver keyholes on the side panels
+            [-d * 0.25, d * 0.25].forEach(kz => {
+                const lock = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.06, 12), chromeMat);
+                lock.rotation.z = Math.PI / 2;
+                lock.position.set(w / 2 + 0.03, h * 0.55, kz);
+                group.add(lock);
+            });
+
+            // Folded white/red "DSL | Peter" nameplate tent cards on top (Media 6 & 8)
+            if (hasNameTent) {
+                const tentTex = createTentCardTexture(tentLabel);
+                [-d * 0.24, d * 0.24].forEach(tz => {
+                    const tent = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.55, 0.42, 1.35),
+                        new THREE.MeshStandardMaterial({ map: tentTex, roughness: 0.3 })
+                    );
+                    tent.position.set(0, h + 0.39, tz);
+                    group.add(tent);
+                });
+            }
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+            addBoxCollider(x, z, w + 0.3, d + 0.3, 0, h + 0.5, `USM Haller Cabinet (${tentLabel || 'DSL'})`);
+        }
+
+        function buildLavaLamp(x, y, z) {
+            const group = new THREE.Group();
+            const chromeMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.15 });
+
+            const base = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.85, 16), chromeMat);
+            base.position.y = 0.42;
+            group.add(base);
+
+            const glass = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.22, 0.42, 1.55, 16),
+                new THREE.MeshStandardMaterial({
+                    color: 0x38bdf8,
+                    emissive: 0x0284c7,
+                    emissiveIntensity: 0.55,
+                    transparent: true,
+                    opacity: 0.82
+                })
+            );
+            glass.position.y = 1.45;
+            group.add(glass);
+
+            const blob = new THREE.Mesh(
+                new THREE.SphereGeometry(0.22, 14, 14),
+                new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+            );
+            blob.position.y = 1.35;
+            group.add(blob);
+            animatedProps.push({ mesh: blob, baseY: 1.35, type: 'lava' });
+
+            const cap = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.45, 16), chromeMat);
+            cap.position.y = 2.35;
+            group.add(cap);
+
+            // Red insulated thermos next to the Lava Lamp (Media 6)
+            const thermos = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.25, 0.25, 1.25, 14),
+                new THREE.MeshStandardMaterial({ color: 0xdc2626, metalness: 0.45, roughness: 0.25 })
+            );
+            thermos.position.set(-0.55, 0.62, 1.6);
+            group.add(thermos);
+
+            group.position.set(x, y, z);
+            scene.add(group);
+        }
+
+        function buildDetailedWorkstation(x, z, w, d, withPartition = true) {
+            const group = new THREE.Group();
+            const topMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.32 });
+            const legMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.45, metalness: 0.3 });
+
+            const top = new THREE.Mesh(new THREE.BoxGeometry(w, 0.22, d), topMat);
+            top.position.y = DESK_HEIGHT;
+            top.castShadow = true;
+            top.receiveShadow = true;
+            group.add(top);
+
+            [-d / 2 + 0.8, d / 2 - 0.8].forEach(lz => {
+                const post = new THREE.Mesh(new THREE.BoxGeometry(0.36, DESK_HEIGHT, 0.36), legMat);
+                post.position.set(0, DESK_HEIGHT / 2, lz);
+                group.add(post);
+                const foot = new THREE.Mesh(new THREE.BoxGeometry(w * 0.76, 0.16, 0.46), legMat);
+                foot.position.set(0, 0.08, lz);
+                group.add(foot);
+            });
+
+            if (withPartition) {
+                const part = new THREE.Mesh(
+                    new THREE.BoxGeometry(w * 0.9, 2.8, 0.26),
+                    new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.88 })
+                );
+                part.position.set(0, DESK_HEIGHT + 1.4, 0);
+                group.add(part);
+            }
+
+            // Dual monitors with silver stands + orange Stabilo pen + keyboard + mouse (Media 3)
+            buildDesktopMonitor(0, DESK_HEIGHT, -1.85, Math.PI / 2, true);
+            buildDesktopMonitor(0, DESK_HEIGHT, 1.85, Math.PI / 2, false);
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+            addBoxCollider(x, z, w * 0.85, d * 0.9, 0, DESK_HEIGHT + 2.5, 'Standing Desk Workstation');
+        }
+
+        function buildOfficeChair(x, z, rotY = 0) {
+            const group = new THREE.Group();
+            const blackMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.55 });
+
+            const column = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.7, 12), blackMat);
+            column.position.y = 0.85;
+            group.add(column);
+
+            for (let i = 0; i < 5; i++) {
+                const leg = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.12, 0.15), blackMat);
+                leg.rotation.y = (i * Math.PI * 2) / 5;
+                leg.position.y = 0.2;
+                group.add(leg);
+            }
+
+            const seat = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.22, 1.75), blackMat);
+            seat.position.y = 1.75;
+            seat.castShadow = true;
+            group.add(seat);
+
+            // Ergonomic curved mesh backrest frame (Media 3, 4, 5)
+            const back = new THREE.Mesh(new THREE.BoxGeometry(1.65, 2.25, 0.18), blackMat);
+            back.position.set(0, 2.9, -0.8);
+            back.castShadow = true;
+            group.add(back);
+
+            group.position.set(x, 0, z);
+            group.rotation.y = rotY;
+            scene.add(group);
+            addBoxCollider(x, z, 2.0, 2.0, 0, 4.0, 'Ergonomic Office Chair');
+        }
+
+        function buildDesktopMonitor(x, y, z, rotY, withStabiloPen = true) {
+            const group = new THREE.Group();
+            const screenMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.18, metalness: 0.45 });
+            const standMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, metalness: 0.85, roughness: 0.18 });
+
+            const base = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.07, 1.15), standMat);
+            base.position.y = 0.035;
+            group.add(base);
+
+            // Orange & green Stabilo fineliner pen resting on the silver monitor stand base (Media 3)!
+            if (withStabiloPen) {
+                const pen = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.04, 0.04, 0.75, 8),
+                    new THREE.MeshBasicMaterial({ color: 0xf97316 })
+                );
+                pen.rotation.z = Math.PI / 2;
+                pen.position.set(0.32, 0.09, 0.15);
+                group.add(pen);
+            }
+
+            const neck = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.45, 0.22), standMat);
+            neck.position.set(-0.22, 0.72, 0);
+            group.add(neck);
+
+            const panel = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.95, 3.35), screenMat);
+            panel.position.set(0, 1.55, 0);
+            panel.castShadow = true;
+            group.add(panel);
+
+            // Logitech webcam on top bezel (Media 3, 4, 5)
+            const webcam = new THREE.Mesh(
+                new THREE.BoxGeometry(0.26, 0.2, 0.55),
+                new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4 })
+            );
+            webcam.position.set(0.06, 2.58, 0);
+            group.add(webcam);
+
+            group.position.set(x, y, z);
+            group.rotation.y = rotY;
+            scene.add(group);
+        }
+
+        function buildDeskStuntCourseAndProps() {
+            const topMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+            const edgeMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.5 });
+
+            // 1. LED-LIT LAUNCH RAMP AT (X = 9.5, Z = -25 to -15)
+            const rampLength = 10.0;
+            const rampAngle = Math.atan2(DESK_HEIGHT, rampLength);
+            const rampMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(5.6, 0.24, rampLength),
+                new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.45 })
+            );
+            rampMesh.rotation.x = -rampAngle;
+            rampMesh.position.set(9.5, DESK_HEIGHT / 2, -20.0);
+            rampMesh.castShadow = true;
+            rampMesh.receiveShadow = true;
+            scene.add(rampMesh);
+
+            // Bright Neon Cyan/Yellow chevrons on the ramp
+            for (let i = -3.8; i <= 3.8; i += 1.9) {
+                const stripe = new THREE.Mesh(
+                    new THREE.BoxGeometry(4.6, 0.28, 0.45),
+                    new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0x22c55e : 0xfacc15 })
+                );
+                stripe.rotation.x = -rampAngle;
+                const progress = (i + 5) / 10;
+                stripe.position.set(9.5, progress * DESK_HEIGHT, -20.0 + i);
+                scene.add(stripe);
+            }
+
+            // Red "Lenovo" Cardboard Box under ramp (from Media 6)
+            const lenovoBox = new THREE.Mesh(
+                new THREE.BoxGeometry(4.8, 1.8, 4.2),
+                new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.75 })
+            );
+            lenovoBox.position.set(9.5, 0.9, -16.8);
+            scene.add(lenovoBox);
+            const lenovoTag = new THREE.Mesh(
+                new THREE.BoxGeometry(4.85, 0.55, 1.4),
+                new THREE.MeshBasicMaterial({ color: 0xe4002b })
+            );
+            lenovoTag.position.set(9.5, 1.1, -16.8);
+            scene.add(lenovoTag);
+
+            surfaceZones.push({
+                minX: 6.5, maxX: 12.5,
+                minZ: -25.2, maxZ: -15.0,
+                getHeight: (x, z) => Math.max(0, Math.min(1, (z - (-25.0)) / 10.0)) * DESK_HEIGHT,
+                name: 'LENOVO LAUNCH RAMP'
+            });
+
+            // 2. DESK SEGMENT A: Clean Desk Island (Media 4 & 5: Acoustic Screen, Dual Monitors, Do🐌So Mug, Power Strip, Headset)
+            const deskA = new THREE.Mesh(new THREE.BoxGeometry(9.2, 0.26, 22.0), topMat);
+            deskA.position.set(10.0, DESK_HEIGHT - 0.13, -4.0);
+            deskA.castShadow = true;
+            deskA.receiveShadow = true;
+            scene.add(deskA);
+
+            // Clipped 6-socket black power strip on desk leg & digital height controller with green LED (Media 4 & 5)
+            const powerStrip = new THREE.Mesh(
+                new THREE.BoxGeometry(0.45, 0.35, 1.8),
+                new THREE.MeshStandardMaterial({ color: 0x18181b })
+            );
+            powerStrip.position.set(5.4, DESK_HEIGHT - 0.35, 2.5);
+            scene.add(powerStrip);
+
+            const heightPad = new THREE.Mesh(
+                new THREE.BoxGeometry(0.35, 0.14, 0.55),
+                new THREE.MeshBasicMaterial({ color: 0x22c55e })
+            );
+            heightPad.position.set(5.45, DESK_HEIGHT - 0.1, 5.2);
+            scene.add(heightPad);
+
+            surfaceZones.push({
+                minX: 5.3, maxX: 14.7,
+                minZ: -15.1, maxZ: 7.1,
+                getHeight: () => DESK_HEIGHT,
+                name: 'CLEAN DESK DUAL-MONITOR SECTOR'
+            });
+
+            // Rounded Grey Acoustic Partition with "DSL (Clean desk)" sign on top (Media 4)
+            const cleanPartition = new THREE.Mesh(
+                new THREE.BoxGeometry(4.8, 2.8, 0.34),
+                new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.85 })
+            );
+            cleanPartition.position.set(12.2, DESK_HEIGHT + 1.4, -3.5);
+            scene.add(cleanPartition);
+
+            const cleanSign = new THREE.Mesh(
+                new THREE.BoxGeometry(1.7, 0.46, 0.12),
+                new THREE.MeshStandardMaterial({ map: createTentCardTexture('(Clean desk)') })
+            );
+            cleanSign.position.set(11.4, DESK_HEIGHT + 2.95, -3.5);
+            scene.add(cleanSign);
+
+            // Dual Monitors + Do🐌So Snail Highlighter Cup + Wireless Keyboard + Headset Stand (Media 4 & 5)
+            buildDesktopMonitor(12.5, DESK_HEIGHT, -9.5, -Math.PI / 2, true);
+            buildDesktopMonitor(12.5, DESK_HEIGHT, -6.0, -Math.PI / 2, false);
+
+            // White Mug with Red Snail Logo ("Do🐌So") and Pink/Blue Highlighters (Media 5)
+            const snailCup = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.38, 0.35, 0.82, 16),
+                new THREE.MeshStandardMaterial({ map: createMugTexture('snail'), roughness: 0.25 })
+            );
+            snailCup.position.set(11.3, DESK_HEIGHT + 0.41, -7.8);
+            scene.add(snailCup);
+
+            // Pink & Yellow highlighters sticking out of Snail Cup
+            [[-0.08, 0xf43f5e, 0.2], [0.08, 0xfacc15, -0.18], [0, 0x38bdf8, 0.05]].forEach(([ox, col, rz]) => {
+                const marker = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.06, 0.06, 1.05, 8),
+                    new THREE.MeshBasicMaterial({ color: col })
+                );
+                marker.position.set(11.3 + ox, DESK_HEIGHT + 0.72, -7.8);
+                marker.rotation.z = rz;
+                scene.add(marker);
+            });
+
+            // Logitech MX Keys Dark Grey Keyboard + Mouse + HP Mini Dock Box (Media 3, 4, 5)
+            const keyboard = new THREE.Mesh(
+                new THREE.BoxGeometry(0.95, 0.06, 2.35),
+                new THREE.MeshStandardMaterial({ color: 0x27272a, roughness: 0.4 })
+            );
+            keyboard.position.set(10.2, DESK_HEIGHT + 0.03, -8.2);
+            scene.add(keyboard);
+
+            const hpDock = new THREE.Mesh(
+                new THREE.BoxGeometry(0.65, 0.32, 0.65),
+                new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.3 })
+            );
+            hpDock.position.set(11.8, DESK_HEIGHT + 0.16, -2.2);
+            scene.add(hpDock);
+
+            // 3. ELEVATED DESK BRIDGE & CORNER DESK (Media 2: Bayesian P(D|H) Mug, Matte-Black Bottle, DSL Text Lab Poster)
+            const deskB = new THREE.Mesh(new THREE.BoxGeometry(28.5, 0.26, 6.4), topMat);
+            deskB.position.set(-4.0, DESK_HEIGHT - 0.13, 5.5);
+            deskB.castShadow = true;
+            deskB.receiveShadow = true;
+            scene.add(deskB);
+
+            surfaceZones.push({
+                minX: -19.0, maxX: 10.8,
+                minZ: 2.2, maxZ: 8.8,
+                getHeight: () => DESK_HEIGHT,
+                name: 'ELEVATED DESK BRIDGE'
+            });
+
+            const deskC = new THREE.Mesh(new THREE.BoxGeometry(9.2, 0.26, 16.2), topMat);
+            deskC.position.set(-19.0, DESK_HEIGHT - 0.13, 10.5);
+            deskC.castShadow = true;
+            deskC.receiveShadow = true;
+            scene.add(deskC);
+
+            surfaceZones.push({
+                minX: -23.7, maxX: -14.3,
+                minZ: 2.3, maxZ: 18.7,
+                getHeight: () => DESK_HEIGHT,
+                name: 'BAYESIAN P(D|H) MUG & TEXT LAB DESK'
+            });
+
+            // Iconic White Bayesian "P(D|H)" Mug (Media 2)
+            const pdMug = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.64, 0.64, 1.38, 20),
+                new THREE.MeshStandardMaterial({ map: createMugTexture('pdh'), roughness: 0.2 })
+            );
+            pdMug.position.set(-21.6, DESK_HEIGHT + 0.69, 7.2);
+            pdMug.rotation.y = 0.55;
+            pdMug.castShadow = true;
+            scene.add(pdMug);
+
+            // Tall Matte-Black Insulated Water Bottle on the front-right edge of Corner Desk (Media 2)
+            const bottleGroup = new THREE.Group();
+            const bottleMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.28, metalness: 0.25 });
+            const bottleBody = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.5, 2.15, 18), bottleMat);
+            bottleBody.position.y = 1.07;
+            bottleGroup.add(bottleBody);
+            const bottleNeck = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.44, 0.55, 18), bottleMat);
+            bottleNeck.position.y = 2.4;
+            bottleGroup.add(bottleNeck);
+            const bottleCap = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.32, 18), bottleMat);
+            bottleCap.position.y = 2.8;
+            bottleGroup.add(bottleCap);
+            bottleGroup.position.set(-16.2, DESK_HEIGHT, 13.2);
+            scene.add(bottleGroup);
+
+            // Monitor on Corner Desk
+            buildDesktopMonitor(-22.0, DESK_HEIGHT, 11.4, Math.PI / 2, true);
+
+            // 4. WALL ARTWORK & POSTERS ABOVE CORNER DESK (Media 2)
+            // (a) DSL TEXT LAB / DATA SOVEREIGNTY Poster
+            const posterMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 4.1, 3.1),
+                new THREE.MeshBasicMaterial({ map: createDSLPosterTexture() })
+            );
+            posterMesh.position.set(-24.6, DESK_HEIGHT + 5.8, 12.6);
+            scene.add(posterMesh);
+
+            // (b) Van Gogh Cafe Terrace Postcard
+            const vanGoghMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 1.65, 2.2),
+                new THREE.MeshBasicMaterial({ map: createPostcardTexture('vangogh') })
+            );
+            vanGoghMesh.position.set(-24.6, DESK_HEIGHT + 5.9, 7.9);
+            scene.add(vanGoghMesh);
+
+            // (c) Edvard Munch The Scream Postcard
+            const screamMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 1.45, 1.15),
+                new THREE.MeshBasicMaterial({ map: createPostcardTexture('scream') })
+            );
+            screamMesh.position.set(-24.6, DESK_HEIGHT + 5.8, 9.8);
+            scene.add(screamMesh);
+
+            // (d) Minimalist Line-Art Sketch Postcard
+            const owlMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 1.45, 1.05),
+                new THREE.MeshBasicMaterial({ map: createPostcardTexture('owl') })
+            );
+            owlMesh.position.set(-24.6, DESK_HEIGHT + 5.8, 11.1);
+            scene.add(owlMesh);
+
+            // (e) Hanging Red & Blue Conference Lanyards with White Badges (Media 2 top-left)
+            const lanyardRed = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 2.8, 0.28),
+                new THREE.MeshBasicMaterial({ color: 0xdc2626 })
+            );
+            lanyardRed.position.set(-24.6, DESK_HEIGHT + 6.3, 6.1);
+            scene.add(lanyardRed);
+            const lanyardBlue = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 2.8, 0.16),
+                new THREE.MeshBasicMaterial({ color: 0x0284c7 })
+            );
+            lanyardBlue.position.set(-24.58, DESK_HEIGHT + 6.3, 6.3);
+            scene.add(lanyardBlue);
+            const badgeCard = new THREE.Mesh(
+                new THREE.BoxGeometry(0.12, 1.2, 0.85),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            badgeCard.position.set(-24.56, DESK_HEIGHT + 4.4, 6.2);
+            scene.add(badgeCard);
+        }
+
+        // --- TWO SELECTABLE TRACK CIRCUITS & HIGH-VISIBILITY TRACK GUIDANCE SYSTEM ---
+        // Track 0 (Default): Floor Grand Prix — 100% smooth wide oak parquet floor loop around USM Haller & Desk islands
+        const floorTrackCheckpoints = [
+            { x: 18.0, y: 0.0, z: 12.0, rotY: 0, radius: 5.5, name: 'GATE 1/8 • Coat Rack Start / Finish' },
+            { x: 18.0, y: 0.0, z: -12.0, rotY: 0, radius: 5.5, name: 'GATE 2/8 • Right Whiteboard Straight' },
+            { x: 2.0,  y: 0.0, z: -24.5, rotY: Math.PI / 2, radius: 5.5, name: 'GATE 3/8 • Back Window & Lenovo Corner' },
+            { x: -16.5, y: 0.0, z: -24.5, rotY: Math.PI * 0.75, radius: 5.5, name: 'GATE 4/8 • Lava Lamp Hairpin' },
+            { x: -20.5, y: 0.0, z: -4.0, rotY: Math.PI, radius: 5.5, name: 'GATE 5/8 • Red Casement Window Alley' },
+            { x: -1.0, y: 0.0, z: -3.0, rotY: -Math.PI / 2, radius: 5.5, name: 'GATE 6/8 • Central USM Haller Chicane' },
+            { x: -1.0, y: 0.0, z: 22.5, rotY: Math.PI * 0.85, radius: 5.5, name: 'GATE 7/8 • Front Security Window Sweep' },
+            { x: 15.5, y: 0.0, z: 25.0, rotY: -Math.PI / 3, radius: 5.5, name: 'GATE 8/8 • Glass Hallway Final Turn' }
+        ];
+
+        // Track 1: Office + Desk Stunt Circuit — climbs the LED Lenovo Ramp onto the Standing Desks & jumps back down
+        const stuntTrackCheckpoints = [
+            { x: 18.0, y: 0.0, z: 12.0, rotY: 0, radius: 5.5, name: 'GATE 1/8 • Coat Rack Start / Finish' },
+            { x: 18.0, y: 0.0, z: -12.0, rotY: 0, radius: 5.5, name: 'GATE 2/8 • Right Whiteboard Straight' },
+            { x: -2.0, y: 0.0, z: -24.5, rotY: Math.PI / 2, radius: 5.5, name: 'GATE 3/8 • Back Window Hairpin' },
+            { x: 9.5,  y: 0.0, z: -25.0, rotY: Math.PI, radius: 5.2, name: 'GATE 4/8 • Line Up for LED Desk Ramp!' },
+            { x: 9.5,  y: 3.2, z: -11.5, rotY: Math.PI, radius: 5.2, name: 'GATE 5/8 • Clean Desk & Snail Mug Top' },
+            { x: -2.0, y: 3.2, z: 5.5, rotY: Math.PI / 2, radius: 5.2, name: 'GATE 6/8 • High-Speed Desk Bridge' },
+            { x: -19.0, y: 3.2, z: 16.5, rotY: Math.PI, radius: 5.5, name: 'GATE 7/8 • P(D|H) Mug & Text Lab Jump-Off!' },
+            { x: 6.0,  y: 0.0, z: 25.0, rotY: -Math.PI / 2, radius: 5.5, name: 'GATE 8/8 • Parquet Landing & Final Sweep' }
+        ];
+
+        let currentTrackMode = 0; // 0 = Floor GP, 1 = Desk Stunt GP
+        let activeCheckpoints = floorTrackCheckpoints;
+        let showGuides = true;
+
+        const trackGuideGroup = new THREE.Group();
+        scene.add(trackGuideGroup);
+        let checkpointGates = [];
+
+        function createGateBannerTexture(text, isStart = false, isNext = false) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 96;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = isNext ? '#059669' : (isStart ? '#e4002b' : '#0f172a');
+            ctx.fillRect(0, 0, 512, 96);
+
+            ctx.strokeStyle = isNext ? '#6ee7b7' : '#38bdf8';
+            ctx.lineWidth = 8;
+            ctx.strokeRect(4, 4, 504, 88);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 30px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, 256, 58);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function rebuildTrackVisuals() {
+            // Clear previous track visuals
+            while (trackGuideGroup.children.length > 0) {
+                trackGuideGroup.remove(trackGuideGroup.children[0]);
+            }
+            checkpointGates = [];
+
+            activeCheckpoints = currentTrackMode === 0 ? floorTrackCheckpoints : stuntTrackCheckpoints;
+
+            // 1. Build Smooth Closed CatmullRom Spline through active checkpoints
+            const curvePoints = activeCheckpoints.map(cp => new THREE.Vector3(cp.x, cp.y + 0.05, cp.z));
+            const trackCurve = new THREE.CatmullRomCurve3(curvePoints, true, 'catmullrom', 0.35);
+
+            // 2. Build FIA Red & White Curbs + Glowing Chevron Racing Line segments along the spline
+            const segments = 150;
+            const trackHalfWidth = 3.1;
+            const redCurbMat = new THREE.MeshStandardMaterial({ color: 0xe4002b, roughness: 0.4 });
+            const whiteCurbMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+            const chevronMat = new THREE.MeshBasicMaterial({
+                map: chevronRibbonTex,
+                transparent: true,
+                opacity: 0.92,
+                side: THREE.DoubleSide
+            });
+
+            for (let i = 0; i < segments; i++) {
+                const t1 = i / segments;
+                const t2 = (i + 1) / segments;
+                const p1 = trackCurve.getPointAt(t1);
+                const p2 = trackCurve.getPointAt(t2);
+                const mid = p1.clone().add(p2).multiplyScalar(0.5);
+                const tangent = p2.clone().sub(p1);
+                const segLen = tangent.length();
+                tangent.normalize();
+
+                const up = new THREE.Vector3(0, 1, 0);
+                const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
+                const yaw = Math.atan2(tangent.x, tangent.z);
+
+                // Center Glowing Chevron Racing Ribbon
+                const ribbon = new THREE.Mesh(new THREE.PlaneGeometry(2.1, segLen * 1.05), chevronMat);
+                ribbon.rotation.x = -Math.PI / 2;
+                ribbon.rotation.z = yaw;
+                ribbon.position.set(mid.x, mid.y + 0.02, mid.z);
+                trackGuideGroup.add(ribbon);
+
+                // Alternating Red & White FIA Curbs on both edges of the track
+                const curbMat = i % 2 === 0 ? redCurbMat : whiteCurbMat;
+                const curbGeo = new THREE.BoxGeometry(0.38, 0.14, segLen * 1.06);
+
+                const leftCurb = new THREE.Mesh(curbGeo, curbMat);
+                leftCurb.position.copy(mid).addScaledVector(right, -trackHalfWidth);
+                leftCurb.position.y += 0.06;
+                leftCurb.rotation.y = yaw;
+                trackGuideGroup.add(leftCurb);
+
+                const rightCurb = new THREE.Mesh(curbGeo, curbMat);
+                rightCurb.position.copy(mid).addScaledVector(right, trackHalfWidth);
+                rightCurb.position.y += 0.06;
+                rightCurb.rotation.y = yaw;
+                trackGuideGroup.add(rightCurb);
+            }
+
+            // 3. Build Numbered Overhead Checkpoint Gates (GATE 1/8 to GATE 8/8)
+            activeCheckpoints.forEach((cp, idx) => {
+                const gateGroup = new THREE.Group();
+                const isStart = idx === 0;
+                const baseColor = isStart ? 0xe4002b : 0x0ea5e9;
+
+                const pillarMat = new THREE.MeshBasicMaterial({
+                    color: baseColor,
+                    transparent: true,
+                    opacity: 0.85
+                });
+
+                const leftPillar = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 4.0, 12), pillarMat);
+                leftPillar.position.set(-3.5, 2.0, 0);
+                gateGroup.add(leftPillar);
+
+                const rightPillar = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 4.0, 12), pillarMat);
+                rightPillar.position.set(3.5, 2.0, 0);
+                gateGroup.add(rightPillar);
+
+                // Overhead Numbered Banner
+                const bannerMat = new THREE.MeshBasicMaterial({
+                    map: createGateBannerTexture(cp.name, isStart, idx === 0),
+                    side: THREE.DoubleSide
+                });
+                const banner = new THREE.Mesh(new THREE.BoxGeometry(7.4, 1.15, 0.25), bannerMat);
+                banner.position.set(0, 4.1, 0);
+                gateGroup.add(banner);
+
+                // Ground glowing target ring
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: baseColor,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.55
+                });
+                const ring = new THREE.Mesh(new THREE.RingGeometry(2.7, 3.3, 28), ringMat);
+                ring.rotation.x = -Math.PI / 2;
+                ring.position.y = 0.06;
+                gateGroup.add(ring);
+
+                gateGroup.position.set(cp.x, cp.y, cp.z);
+                gateGroup.rotation.y = cp.rotY;
+                scene.add(gateGroup);
+
+                checkpointGates.push({
+                    group: gateGroup,
+                    leftPillar,
+                    rightPillar,
+                    banner,
+                    ring,
+                    pillarMat,
+                    ringMat,
+                    name: cp.name,
+                    isStart
+                });
+            });
+        }
+
+        function updateCheckpointGateHighlight() {
+            checkpointGates.forEach((gate, idx) => {
+                const isTarget = idx === player.nextCp;
+                const col = isTarget ? 0x22c55e : (gate.isStart ? 0xe4002b : 0x0ea5e9);
+                gate.pillarMat.color.setHex(col);
+                gate.ringMat.color.setHex(col);
+                gate.ring.scale.setScalar(isTarget ? 1.18 : 1.0);
+            });
+        }
+
+        // Collectible CUDA Boost Orbs
+        function buildBoostOrbs() {
+            const orbLocations = [
+                [18.0, 0.65, 0.0],
+                [-9.0, 0.65, -24.5],
+                [-20.5, 0.65, 4.0],
+                [-1.0, 0.65, 10.0],
+                [9.5, 3.85, -5.0],
+                [-10.0, 3.85, 5.5]
+            ];
+            orbLocations.forEach(([x, y, z]) => {
+                const orb = new THREE.Mesh(
+                    new THREE.OctahedronGeometry(0.58, 0),
+                    new THREE.MeshBasicMaterial({ color: 0x22d3ee })
+                );
+                orb.position.set(x, y, z);
+                scene.add(orb);
+                boostPads.push({ mesh: orb, x, y, z, cooldown: 0 });
+            });
+        }
+
+        // --- BUILD THE MICRO RC RACE CARS + 3D OVERHEAD GPS DIRECTIONAL ARROW ---
+        function createRCCarMesh(primaryColor = 0xe4002b, accentColor = 0xffffff) {
+            const carGroup = new THREE.Group();
+            const bodyMat = new THREE.MeshStandardMaterial({ color: primaryColor, roughness: 0.2, metalness: 0.4 });
+            const accentMat = new THREE.MeshStandardMaterial({ color: accentColor, roughness: 0.25 });
+            const carbonMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.4, metalness: 0.5 });
+            const tireMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.85 });
+
+            const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.38, 0.34, 2.6), bodyMat);
+            chassis.position.y = 0.33;
+            chassis.castShadow = true;
+            carGroup.add(chassis);
+
+            const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.36, 2.62), accentMat);
+            stripe.position.y = 0.33;
+            carGroup.add(stripe);
+
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.08, 0.34, 1.18), carbonMat);
+            cabin.position.set(0, 0.62, -0.1);
+            carGroup.add(cabin);
+
+            const wing = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.09, 0.44), carbonMat);
+            wing.position.set(0, 0.78, 1.14);
+            carGroup.add(wing);
+
+            const headMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+            const tailMat = new THREE.MeshBasicMaterial({ color: 0xff0033 });
+            [-0.44, 0.44].forEach(lx => {
+                const hl = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.14, 0.08), headMat);
+                hl.position.set(lx, 0.36, -1.31);
+                carGroup.add(hl);
+                const tl = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.14, 0.08), tailMat);
+                tl.position.set(lx, 0.38, 1.31);
+                carGroup.add(tl);
+            });
+
+            const wheels = [];
+            [[-0.74, 0.28, -0.84], [0.74, 0.28, -0.84], [-0.74, 0.28, 0.84], [0.74, 0.28, 0.84]].forEach(([wx, wy, wz]) => {
+                const wMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.29, 0.28, 16), tireMat);
+                wMesh.rotation.z = Math.PI / 2;
+                wMesh.position.set(wx, wy, wz);
+                wMesh.castShadow = true;
+                carGroup.add(wMesh);
+                wheels.push(wMesh);
+            });
+
+            scene.add(carGroup);
+            return { group: carGroup, wheels };
+        }
+
+        const playerVisual = createRCCarMesh(0xe4002b, 0xffffff);
+        const aiVisual = createRCCarMesh(0x0284c7, 0xfacc15);
+
+        // Floating 3D Emerald Green GPS Arrow above Player Car pointing to next Checkpoint Gate!
+        const gpsArrowGroup = new THREE.Group();
+        const gpsMat = new THREE.MeshBasicMaterial({ color: 0x22c55e });
+        const gpsShaft = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.14, 0.95), gpsMat);
+        gpsShaft.position.z = 0.25;
+        gpsArrowGroup.add(gpsShaft);
+        const gpsHead = new THREE.Mesh(new THREE.ConeGeometry(0.48, 0.75, 4), gpsMat);
+        gpsHead.rotation.x = -Math.PI / 2;
+        gpsHead.rotation.y = Math.PI / 4;
+        gpsHead.position.z = -0.45;
+        gpsArrowGroup.add(gpsHead);
+        scene.add(gpsArrowGroup);
+
+        // Drift Skidmarks
+        const skidMarks = [];
+        const skidGeo = new THREE.PlaneGeometry(0.24, 0.48);
+        const skidMat = new THREE.MeshBasicMaterial({ color: 0x111827, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+        function spawnSkidMark(x, y, z, heading) {
+            if (skidMarks.length > 140) {
+                scene.remove(skidMarks.shift());
+            }
+            const mark = new THREE.Mesh(skidGeo, skidMat);
+            mark.rotation.x = -Math.PI / 2;
+            mark.rotation.z = heading;
+            mark.position.set(x, y + 0.02, z);
+            scene.add(mark);
+            skidMarks.push(mark);
+        }
+
+        // --- PLAYER & AI STATE ---
+        const player = {
+            x: 18.0, y: 0.0, z: 19.5, vy: 0.0,
+            heading: 0.0, speed: 0.0, boost: 100.0,
+            lap: 1, maxLaps: 3, nextCp: 0,
+            lapStartTime: 0,
+            bestLapMs: parseFloat(localStorage.getItem('dsl_micro_gp_v2_best') || '0'),
+            currentSurface: 'OAK PARQUET FLOOR',
+            onGround: true
+        };
+
+        const ai = {
+            x: 15.8, y: 0.0, z: 21.0, vy: 0.0,
+            heading: 0.0, speed: 0.0, targetWp: 0, active: true
+        };
+
+        // --- GAME & CAMERA STATE ---
+        let gameState = 'menu'; // 'menu' | 'racing' | 'drone' | 'finished'
+        let cameraMode = 0;
+        const camModes = ['Chase Cam (C)', 'Hood FPV (C)', 'Overhead Cam (C)'];
+
+        const drone = {
+            x: 0, y: 7.5, z: 16,
+            yaw: 0, pitch: -0.22,
+            isDragging: false, lastMouseX: 0, lastMouseY: 0
+        };
+
+        const keys = { up: false, down: false, left: false, right: false, drift: false, boost: false };
+
+        // --- LIVE KEY-CAP HIGHLIGHT HELPER ---
+        function setKeyCapVisual(id, isActive) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (isActive) el.classList.add('active');
+            else el.classList.remove('active');
+        }
+        function flashKeyCap(id) {
+            setKeyCapVisual(id, true);
+            setTimeout(() => setKeyCapVisual(id, false), 180);
+        }
+
+        // --- KEYBOARD & MOUSE LISTENERS ---
+        window.addEventListener('keydown', (e) => {
+            const code = e.code;
+            if (code === 'KeyW' || code === 'ArrowUp') { keys.up = true; setKeyCapVisual('key-w', true); }
+            if (code === 'KeyS' || code === 'ArrowDown') { keys.down = true; setKeyCapVisual('key-s', true); }
+            if (code === 'KeyA' || code === 'ArrowLeft') { keys.left = true; setKeyCapVisual('key-a', true); }
+            if (code === 'KeyD' || code === 'ArrowRight') { keys.right = true; setKeyCapVisual('key-d', true); }
+            if (code === 'Space') { keys.drift = true; setKeyCapVisual('key-space', true); }
+            if (code === 'ShiftLeft' || code === 'ShiftRight') { keys.boost = true; setKeyCapVisual('key-shift', true); }
+
+            if (code === 'KeyC') { flashKeyCap('key-c'); cycleCamera(); }
+            if (code === 'KeyR') { flashKeyCap('key-r'); resetPlayerToCheckpoint(); }
+            if (code === 'KeyT') { flashKeyCap('key-t'); toggleTrackMode(); }
+            if (code === 'KeyG') { flashKeyCap('key-g'); toggleTrackGuides(); }
+            if (code === 'KeyV' || code === 'KeyF') { flashKeyCap('key-v'); toggleDroneMode(); }
+            if (code === 'KeyM') toggleAudio();
+            if (code === 'KeyH' || code === 'Escape') toggleHelpModal();
+        });
+
+        window.addEventListener('keyup', (e) => {
+            const code = e.code;
+            if (code === 'KeyW' || code === 'ArrowUp') { keys.up = false; setKeyCapVisual('key-w', false); }
+            if (code === 'KeyS' || code === 'ArrowDown') { keys.down = false; setKeyCapVisual('key-s', false); }
+            if (code === 'KeyA' || code === 'ArrowLeft') { keys.left = false; setKeyCapVisual('key-a', false); }
+            if (code === 'KeyD' || code === 'ArrowRight') { keys.right = false; setKeyCapVisual('key-d', false); }
+            if (code === 'Space') { keys.drift = false; setKeyCapVisual('key-space', false); }
+            if (code === 'ShiftLeft' || code === 'ShiftRight') { keys.boost = false; setKeyCapVisual('key-shift', false); }
+        });
+
+        renderer.domElement.addEventListener('mousedown', (e) => {
+            if (gameState === 'drone') {
+                drone.isDragging = true;
+                drone.lastMouseX = e.clientX;
+                drone.lastMouseY = e.clientY;
+            }
+        });
+        window.addEventListener('mouseup', () => { drone.isDragging = false; });
+        window.addEventListener('mousemove', (e) => {
+            if (gameState === 'drone' && drone.isDragging) {
+                const dx = e.clientX - drone.lastMouseX;
+                const dy = e.clientY - drone.lastMouseY;
+                drone.lastMouseX = e.clientX;
+                drone.lastMouseY = e.clientY;
+                drone.yaw -= dx * 0.0045;
+                drone.pitch = Math.max(-1.3, Math.min(1.3, drone.pitch - dy * 0.0045));
+            }
+        });
+
+        function bindTouchButton(id, keyName) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('touchstart', (e) => { e.preventDefault(); sound.init(); keys[keyName] = true; });
+            el.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; });
+        }
+        bindTouchButton('touch-left', 'left');
+        bindTouchButton('touch-right', 'right');
+        bindTouchButton('touch-gas', 'up');
+        bindTouchButton('touch-brake', 'down');
+        bindTouchButton('touch-drift', 'drift');
+        bindTouchButton('touch-boost', 'boost');
+
+        // --- TOAST NOTIFICATIONS ---
+        let toastTimeout = null;
+        function showLandmarkToast(text) {
+            const toast = document.getElementById('landmark-toast');
+            const label = document.getElementById('landmark-text');
+            label.textContent = text;
+            toast.classList.remove('opacity-0', '-translate-y-3');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', '-translate-y-3');
+            }, 3400);
+        }
+
+        // --- SURFACE ELEVATION & COLLISION SOLVER ---
+        function getGroundElevation(x, z, currentY) {
+            let bestY = 0.0;
+            let zoneName = 'OAK PARQUET FLOOR';
+            for (const zone of surfaceZones) {
+                if (x >= zone.minX && x <= zone.maxX && z >= zone.minZ && z <= zone.maxZ) {
+                    const zh = zone.getHeight(x, z);
+                    if (currentY + 1.2 >= zh && zh >= bestY) {
+                        bestY = zh;
+                        zoneName = zone.name;
+                    }
+                }
+            }
+            return { height: bestY, name: zoneName };
+        }
+
+        function resolveCollisions(car, radius = 0.9, isPlayer = true) {
+            const wallLimX = 23.6;
+            const wallLimZ = 30.6;
+            if (car.x < -wallLimX) { car.x = -wallLimX; car.speed *= 0.65; }
+            if (car.x > wallLimX) { car.x = wallLimX; car.speed *= 0.65; }
+            if (car.z < -wallLimZ) { car.z = -wallLimZ; car.speed *= 0.65; }
+            if (car.z > wallLimZ) { car.z = wallLimZ; car.speed *= 0.65; }
+
+            for (const box of colliders) {
+                if (car.y + 0.8 < box.minY || car.y > box.maxY) continue;
+                const closestX = Math.max(box.minX, Math.min(car.x, box.maxX));
+                const closestZ = Math.max(box.minZ, Math.min(car.z, box.maxZ));
+                const dx = car.x - closestX;
+                const dz = car.z - closestZ;
+                const distSq = dx * dx + dz * dz;
+
+                if (distSq < radius * radius) {
+                    const dist = Math.sqrt(distSq) || 0.001;
+                    const overlap = radius - dist;
+                    car.x += (dx / dist) * overlap;
+                    car.z += (dz / dist) * overlap;
+                    car.speed *= 0.58;
+                    if (isPlayer && Math.abs(car.speed) > 4.5) {
+                        sound.playChime('bump');
+                        if (box.label) showLandmarkToast(`Bumped: ${box.label} (Press R if stuck)`);
+                    }
+                }
+            }
+        }
+
+        // --- UPDATE CAR PHYSICS, GPS ARROW & CHECKPOINTS ---
+        function updateCarPhysics(dt, now) {
+            const maxSpeed = (keys.boost && player.boost > 2) ? 31.0 : 21.5;
+            const accel = (keys.boost && player.boost > 2) ? 28.0 : 18.0;
+            const reverseMax = -10.5;
+
+            if (keys.up) player.speed += accel * dt;
+            else if (keys.down) player.speed -= 21.0 * dt;
+            else player.speed *= Math.pow(0.24, dt);
+
+            if (keys.boost && player.boost > 2 && keys.up) {
+                player.boost = Math.max(0, player.boost - 32 * dt);
+            } else {
+                player.boost = Math.min(100, player.boost + 8.5 * dt);
+            }
+
+            player.speed = Math.max(reverseMax, Math.min(maxSpeed, player.speed));
+
+            const steerRate = keys.drift ? 3.35 : 2.38;
+            const speedFactor = Math.min(1.0, Math.abs(player.speed) / 4.2);
+            const dirSign = player.speed >= -0.2 ? 1 : -1;
+
+            let steerInput = 0;
+            if (keys.left) steerInput += 1;
+            if (keys.right) steerInput -= 1;
+
+            player.heading += steerInput * steerRate * speedFactor * dirSign * dt;
+
+            player.x += -Math.sin(player.heading) * player.speed * dt;
+            player.z += -Math.cos(player.heading) * player.speed * dt;
+
+            const ground = getGroundElevation(player.x, player.z, player.y);
+            if (player.y > ground.height + 0.05) {
+                player.vy -= 28.0 * dt;
+                player.y += player.vy * dt;
+                player.onGround = false;
+                if (player.y <= ground.height) {
+                    player.y = ground.height;
+                    player.vy = 0;
+                    player.onGround = true;
+                }
+            } else {
+                if (ground.height > player.y && keys.up) player.vy = 2.8;
+                player.y = ground.height;
+                player.vy = 0;
+                player.onGround = true;
+            }
+
+            if (ground.name !== player.currentSurface) {
+                player.currentSurface = ground.name;
+                document.getElementById('surface-indicator').textContent = ground.name;
+            }
+
+            resolveCollisions(player, 0.9, true);
+
+            if (keys.drift && Math.abs(player.speed) > 7.5 && player.onGround) {
+                spawnSkidMark(player.x, player.y, player.z, player.heading);
+            }
+
+            playerVisual.group.position.set(player.x, player.y, player.z);
+            playerVisual.group.rotation.y = player.heading + (keys.drift ? steerInput * 0.22 : 0);
+            playerVisual.wheels.forEach((w, idx) => {
+                w.rotation.x -= player.speed * dt * 1.8;
+                if (idx < 2) w.rotation.y = steerInput * 0.4;
+            });
+
+            sound.updateMotor(player.speed / 22.0, keys.drift, keys.boost && player.boost > 2, gameState === 'racing');
+
+            // Update 3D Overhead GPS Arrow pointing directly to Next Checkpoint Gate
+            const targetCp = activeCheckpoints[player.nextCp];
+            const dxToCp = targetCp.x - player.x;
+            const dzToCp = targetCp.z - player.z;
+            const distToCp = Math.hypot(dxToCp, dzToCp);
+            const angleToCp = Math.atan2(-dxToCp, -dzToCp);
+
+            gpsArrowGroup.position.set(player.x, player.y + 1.65 + Math.sin(now * 0.008) * 0.12, player.z);
+            gpsArrowGroup.rotation.y = angleToCp;
+            gpsArrowGroup.visible = gameState === 'racing';
+
+            document.getElementById('hud-next-gate-name').textContent = targetCp.name;
+            document.getElementById('hud-next-gate-dist').textContent = `(${Math.round(distToCp)}m)`;
+
+            // Checkpoint Gate Crossing Check
+            if (distToCp < targetCp.radius && Math.abs(player.y - targetCp.y) < 3.0) {
+                player.nextCp = (player.nextCp + 1) % activeCheckpoints.length;
+                updateCheckpointGateHighlight();
+                showLandmarkToast(`✓ Passed ${targetCp.name}`);
+
+                if (player.nextCp === 1 && player.lapStartTime > 0) {
+                    const lapMs = now - player.lapStartTime;
+                    player.lapStartTime = now;
+
+                    if (player.bestLapMs === 0 || lapMs < player.bestLapMs) {
+                        player.bestLapMs = lapMs;
+                        localStorage.setItem('dsl_micro_gp_v2_best', String(lapMs));
+                        document.getElementById('hud-best').textContent = formatTime(lapMs);
+                    }
+
+                    if (player.lap >= player.maxLaps && ai.active) {
+                        sound.playChime('lap');
+                        finishRace();
+                        return;
+                    } else {
+                        player.lap++;
+                        sound.playChime('lap');
+                        showLandmarkToast(`🏁 LAP ${player.lap}/${player.maxLaps} — Keep Following the Green Arrows!`);
+                    }
+                } else {
+                    sound.playChime('checkpoint');
+                }
+            }
+
+            // Collectible CUDA Boost Orbs
+            boostPads.forEach(pad => {
+                if (pad.cooldown > 0) {
+                    pad.cooldown -= dt;
+                    pad.mesh.visible = pad.cooldown <= 0;
+                    return;
+                }
+                pad.mesh.rotation.y += 2.6 * dt;
+                if (Math.hypot(player.x - pad.x, player.z - pad.z) < 1.9 && Math.abs(player.y - pad.y) < 1.9) {
+                    player.boost = 100;
+                    pad.cooldown = 6.0;
+                    pad.mesh.visible = false;
+                    sound.playChime('boost');
+                    showLandmarkToast('⚡ Collected CUDA GPU Boost Orb (+100% Nitro)');
+                }
+            });
+
+            // AI Rival ("Reviewer #2") follows active track checkpoints
+            if (ai.active) {
+                aiVisual.group.visible = true;
+                const wp = activeCheckpoints[ai.targetWp];
+                const dx = wp.x - ai.x;
+                const dz = wp.z - ai.z;
+                if (Math.hypot(dx, dz) < 4.2) {
+                    ai.targetWp = (ai.targetWp + 1) % activeCheckpoints.length;
+                }
+                const desiredHeading = Math.atan2(-dx, -dz);
+                let diff = desiredHeading - ai.heading;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+
+                ai.heading += Math.max(-2.7 * dt, Math.min(2.7 * dt, diff * 3.2 * dt));
+                const targetAiSpeed = Math.abs(diff) > 0.6 ? 13.5 : 17.8;
+                ai.speed += (targetAiSpeed - ai.speed) * 3.0 * dt;
+
+                ai.x += -Math.sin(ai.heading) * ai.speed * dt;
+                ai.z += -Math.cos(ai.heading) * ai.speed * dt;
+
+                const aiGround = getGroundElevation(ai.x, ai.z, ai.y);
+                ai.y += (aiGround.height - ai.y) * Math.min(1, 10 * dt);
+                resolveCollisions(ai, 0.85, false);
+
+                aiVisual.group.position.set(ai.x, ai.y, ai.z);
+                aiVisual.group.rotation.y = ai.heading;
+            } else {
+                aiVisual.group.visible = false;
+            }
+        }
+
+        // --- UPDATE CAMERA ---
+        function updateCamera(dt) {
+            if (gameState === 'drone') {
+                const moveSpeed = 16.0 * dt;
+                const forwardX = -Math.sin(drone.yaw);
+                const forwardZ = -Math.cos(drone.yaw);
+                const rightX = Math.cos(drone.yaw);
+                const rightZ = -Math.sin(drone.yaw);
+
+                if (keys.up) { drone.x += forwardX * moveSpeed; drone.z += forwardZ * moveSpeed; }
+                if (keys.down) { drone.x -= forwardX * moveSpeed; drone.z -= forwardZ * moveSpeed; }
+                if (keys.left) { drone.x -= rightX * moveSpeed; drone.z -= rightZ * moveSpeed; }
+                if (keys.right) { drone.x += rightX * moveSpeed; drone.z += rightZ * moveSpeed; }
+                if (keys.drift) drone.y = Math.min(13.5, drone.y + 10.0 * dt);
+                if (keys.boost) drone.y = Math.max(1.0, drone.y - 10.0 * dt);
+
+                drone.x = Math.max(-23.5, Math.min(23.5, drone.x));
+                drone.z = Math.max(-30.5, Math.min(30.5, drone.z));
+
+                camera.position.set(drone.x, drone.y, drone.z);
+                camera.lookAt(
+                    drone.x - Math.sin(drone.yaw) * Math.cos(drone.pitch) * 10,
+                    drone.y + Math.sin(drone.pitch) * 10,
+                    drone.z - Math.cos(drone.yaw) * Math.cos(drone.pitch) * 10
+                );
+                return;
+            }
+
+            if (cameraMode === 0) {
+                const dist = 5.5;
+                const height = 2.55;
+                const targetX = player.x + Math.sin(player.heading) * dist;
+                const targetZ = player.z + Math.cos(player.heading) * dist;
+                const targetY = Math.min(13.2, player.y + height);
+
+                camera.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), Math.min(1, 9.5 * dt));
+                camera.lookAt(
+                    player.x - Math.sin(player.heading) * 3.8,
+                    player.y + 0.85,
+                    player.z - Math.cos(player.heading) * 3.8
+                );
+            } else if (cameraMode === 1) {
+                const fpvX = player.x - Math.sin(player.heading) * 0.55;
+                const fpvZ = player.z - Math.cos(player.heading) * 0.55;
+                camera.position.set(fpvX, player.y + 0.75, fpvZ);
+                camera.lookAt(
+                    player.x - Math.sin(player.heading) * 12.0,
+                    player.y + 0.75,
+                    player.z - Math.cos(player.heading) * 12.0
+                );
+            } else {
+                camera.position.lerp(new THREE.Vector3(player.x, 13.8, player.z + 8.5), Math.min(1, 6.0 * dt));
+                camera.lookAt(player.x, player.y, player.z);
+            }
+        }
+
+        // --- LIVE 2D TRACK & GATE RADAR MINIMAP ---
+        const mapCanvas = document.getElementById('minimap-canvas');
+        const mapCtx = mapCanvas.getContext('2d');
+
+        function drawMinimap() {
+            const w = mapCanvas.width;
+            const h = mapCanvas.height;
+            mapCtx.clearRect(0, 0, w, h);
+
+            const toX = (x) => ((x + 25) / 50) * (w - 18) + 9;
+            const toY = (z) => ((z + 32) / 64) * (h - 18) + 9;
+
+            // Room border
+            mapCtx.fillStyle = '#0f172a';
+            mapCtx.fillRect(9, 9, w - 18, h - 18);
+            mapCtx.strokeStyle = '#64748b';
+            mapCtx.lineWidth = 1.5;
+            mapCtx.strokeRect(9, 9, w - 18, h - 18);
+
+            // Furniture collider blocks
+            mapCtx.fillStyle = 'rgba(148, 163, 184, 0.25)';
+            colliders.forEach(c => {
+                const x1 = toX(c.minX), y1 = toY(c.minZ);
+                const x2 = toX(c.maxX), y2 = toY(c.maxZ);
+                mapCtx.fillRect(x1, y1, x2 - x1, y2 - y1);
+            });
+
+            // Draw full connected track loop path
+            mapCtx.strokeStyle = 'rgba(16, 185, 129, 0.65)';
+            mapCtx.lineWidth = 3.5;
+            mapCtx.beginPath();
+            activeCheckpoints.forEach((cp, idx) => {
+                const px = toX(cp.x), py = toY(cp.z);
+                if (idx === 0) mapCtx.moveTo(px, py);
+                else mapCtx.lineTo(px, py);
+            });
+            mapCtx.closePath();
+            mapCtx.stroke();
+
+            // Draw all 8 Gate dots & highlight Next Gate in pulsing bright green
+            activeCheckpoints.forEach((cp, idx) => {
+                const px = toX(cp.x), py = toY(cp.z);
+                const isNext = idx === player.nextCp;
+                mapCtx.fillStyle = isNext ? '#22c55e' : '#38bdf8';
+                mapCtx.beginPath();
+                mapCtx.arc(px, py, isNext ? 5.2 : 2.6, 0, Math.PI * 2);
+                mapCtx.fill();
+            });
+
+            // AI Rival dot
+            if (ai.active) {
+                mapCtx.fillStyle = '#38bdf8';
+                mapCtx.beginPath();
+                mapCtx.arc(toX(ai.x), toY(ai.z), 3.6, 0, Math.PI * 2);
+                mapCtx.fill();
+            }
+
+            // Player directional triangle
+            const px = toX(player.x), py = toY(player.z);
+            mapCtx.save();
+            mapCtx.translate(px, py);
+            mapCtx.rotate(-player.heading);
+            mapCtx.fillStyle = '#ef4444';
+            mapCtx.beginPath();
+            mapCtx.moveTo(0, -6);
+            mapCtx.lineTo(4.5, 5);
+            mapCtx.lineTo(-4.5, 5);
+            mapCtx.closePath();
+            mapCtx.fill();
+            mapCtx.restore();
+        }
+
+        // --- HUD & GAME FLOW HELPERS ---
+        function formatTime(ms) {
+            if (!ms || ms <= 0) return '00:00.00';
+            const totalSec = ms / 1000;
+            const mins = Math.floor(totalSec / 60);
+            const secs = Math.floor(totalSec % 60);
+            const hundredths = Math.floor((ms % 1000) / 10);
+            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(hundredths).padStart(2, '0')}`;
+        }
+
+        function updateHUD() {
+            document.getElementById('hud-lap').textContent = ai.active ? `${player.lap}/${player.maxLaps}` : `${player.lap}`;
+            document.getElementById('hud-cp').textContent = `${player.nextCp + 1}/${activeCheckpoints.length}`;
+            document.getElementById('hud-speed').textContent = Math.round(Math.abs(player.speed) * 4.2);
+            document.getElementById('hud-boost-pct').textContent = `${Math.round(player.boost)}%`;
+            document.getElementById('hud-boost-bar').style.width = `${player.boost}%`;
+
+            if (gameState === 'racing' && player.lapStartTime > 0) {
+                document.getElementById('hud-time').textContent = formatTime(performance.now() - player.lapStartTime);
+            }
+            if (player.bestLapMs > 0) {
+                document.getElementById('hud-best').textContent = formatTime(player.bestLapMs);
+            }
+            drawMinimap();
+        }
+
+        function startRace(withAI = true) {
+            sound.init();
+            ai.active = withAI;
+            document.getElementById('hud-pos').textContent = withAI ? '1st' : 'SOLO';
+
+            player.x = 18.0;
+            player.y = 0.0;
+            player.z = 19.5;
+            player.vy = 0;
+            player.heading = 0;
+            player.speed = 0;
+            player.boost = 100;
+            player.lap = 1;
+            player.nextCp = 0;
+            player.lapStartTime = performance.now();
+
+            ai.x = 15.8;
+            ai.y = 0.0;
+            ai.z = 21.5;
+            ai.heading = 0;
+            ai.speed = 0;
+            ai.targetWp = 0;
+
+            updateCheckpointGateHighlight();
+            gameState = 'racing';
+            document.getElementById('modal-overlay').classList.add('hidden');
+            document.getElementById('drone-banner').classList.add('hidden');
+            showLandmarkToast('🏁 GO! Follow the Green Floor Arrows & Floating GPS Arrow through GATE 1/8!');
+        }
+
+        function resetPlayerToCheckpoint() {
+            const prevIdx = (player.nextCp - 1 + activeCheckpoints.length) % activeCheckpoints.length;
+            const cp = activeCheckpoints[prevIdx];
+            player.x = cp.x;
+            player.y = cp.y + 0.15;
+            player.z = cp.z;
+            player.vy = 0;
+            player.speed = 0;
+            player.heading = cp.rotY;
+            showLandmarkToast(`↺ Respawned on Track at ${cp.name}`);
+        }
+
+        function toggleTrackMode(forceMode = null) {
+            currentTrackMode = forceMode !== null ? forceMode : (currentTrackMode + 1) % 2;
+            const isFloor = currentTrackMode === 0;
+            document.getElementById('track-badge').textContent = isFloor ? 'FLOOR GP' : 'DESK STUNT GP';
+            document.getElementById('track-btn-label').textContent = isFloor ? 'Track: Floor GP (T)' : 'Track: Desk Stunt (T)';
+
+            // Update modal buttons
+            const floorBtn = document.getElementById('modal-track-floor');
+            const stuntBtn = document.getElementById('modal-track-stunt');
+            if (isFloor) {
+                floorBtn.className = 'p-2 rounded-xl border border-emerald-400 bg-emerald-500/20 text-white font-bold text-left transition';
+                stuntBtn.className = 'p-2 rounded-xl border border-slate-700 bg-slate-800/80 text-slate-300 font-bold text-left hover:border-amber-400 transition';
+            } else {
+                stuntBtn.className = 'p-2 rounded-xl border border-amber-400 bg-amber-500/20 text-white font-bold text-left transition';
+                floorBtn.className = 'p-2 rounded-xl border border-slate-700 bg-slate-800/80 text-slate-300 font-bold text-left hover:border-emerald-400 transition';
+            }
+
+            rebuildTrackVisuals();
+            player.nextCp = 0;
+            ai.targetWp = 0;
+            updateCheckpointGateHighlight();
+            if (gameState === 'racing') {
+                resetPlayerToCheckpoint();
+            }
+            showLandmarkToast(isFloor ? '🛣️ Switched to Floor Grand Prix (Smooth Parquet Loop)' : '🛣️ Switched to Office + Desk Stunt Circuit (LED Ramp Active!)');
+        }
+
+        function toggleTrackGuides() {
+            showGuides = !showGuides;
+            trackGuideGroup.visible = showGuides;
+            showLandmarkToast(showGuides ? '🟢 Track Curbs & Glowing Racing Line: ON' : '⚪ Track Curbs & Glowing Racing Line: HIDDEN');
+        }
+
+        function cycleCamera() {
+            cameraMode = (cameraMode + 1) % camModes.length;
+            document.getElementById('cam-label').textContent = camModes[cameraMode];
+            showLandmarkToast(`🎥 Camera: ${camModes[cameraMode]}`);
+        }
+
+        function toggleDroneMode() {
+            if (gameState === 'drone') {
+                gameState = 'racing';
+                document.getElementById('drone-banner').classList.add('hidden');
+                showLandmarkToast('Returned to RC Race Car');
+            } else {
+                gameState = 'drone';
+                drone.x = player.x;
+                drone.y = Math.max(5.5, player.y + 3.5);
+                drone.z = player.z + 5.0;
+                drone.yaw = 0;
+                drone.pitch = -0.2;
+                document.getElementById('modal-overlay').classList.add('hidden');
+                document.getElementById('drone-banner').classList.remove('hidden');
+            }
+        }
+
+        function jumpDroneToLandmark(spot) {
+            gameState = 'drone';
+            document.getElementById('modal-overlay').classList.add('hidden');
+            document.getElementById('drone-banner').classList.remove('hidden');
+
+            if (spot === 'entrance') {
+                drone.x = 17.5; drone.y = 5.2; drone.z = 24.5;
+                drone.yaw = -1.1; drone.pitch = -0.05;
+                showLandmarkToast('🧥 Viewing: Glass Entrance Door, Coat Rack & Yellow High-Vis Vest');
+            } else if (spot === 'center') {
+                drone.x = 0.5; drone.y = 6.0; drone.z = 12.0;
+                drone.yaw = 0.0; drone.pitch = -0.18;
+                showLandmarkToast('🗄️ Viewing: Glossy Black & Chrome USM Haller Cabinets ("DSL | Peter")');
+            } else if (spot === 'closeup') {
+                drone.x = 8.2; drone.y = 4.6; drone.z = -5.5;
+                drone.yaw = -1.2; drone.pitch = -0.22;
+                showLandmarkToast('🐌 Viewing: Dual Monitors, Stabilo Pens & "Do🐌So" Highlighter Mug');
+            } else if (spot === 'lava') {
+                drone.x = -5.5; drone.y = 6.2; drone.z = -11.5;
+                drone.yaw = 0.35; drone.pitch = -0.15;
+                showLandmarkToast('🧪 Viewing: Lava Lamp, Red Thermos, Lenovo Box & Back Whiteboard');
+            } else if (spot === 'corner') {
+                drone.x = -14.2; drone.y = 6.0; drone.z = 12.2;
+                drone.yaw = 1.45; drone.pitch = -0.12;
+                showLandmarkToast('☕ Viewing: Bayesian P(D|H) Mug, Black Bottle, Art Postcards & DSL Text Lab Poster');
+            }
+        }
+
+        function toggleAudio() {
+            sound.init();
+            sound.muted = !sound.muted;
+            document.getElementById('audio-icon').textContent = sound.muted ? '🔇' : '🔊';
+        }
+
+        function toggleHelpModal() {
+            const modal = document.getElementById('modal-overlay');
+            if (modal.classList.contains('hidden')) {
+                gameState = 'menu';
+                sound.updateMotor(0, false, false, false);
+                document.getElementById('modal-title').textContent = 'DSL MICRO GP v2.0 — CONTROLS & TRACK GUIDE';
+                modal.classList.remove('hidden');
+            } else {
+                startRace(ai.active);
+            }
+        }
+
+        function finishRace() {
+            gameState = 'finished';
+            sound.updateMotor(0, false, false, false);
+            document.getElementById('modal-title').textContent = '🏆 RACE COMPLETE — PAPER ACCEPTED!';
+            document.getElementById('modal-subtitle').innerHTML = `You conquered all 3 laps around the <b>University of Bern Data Science Lab</b>! Your Best Lap Time: <b class="text-emerald-300 font-mono">${formatTime(player.bestLapMs)}</b>. Switch track modes or explore the office in Drone Mode!`;
+            document.getElementById('modal-overlay').classList.remove('hidden');
+        }
+
+        function downloadStandaloneHTML() {
+            const htmlContent = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+            const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'dsl_micro_gp_v2.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showLandmarkToast('⬇ Saved dsl_micro_gp_v2.html!');
+        }
+
+        // --- UI BUTTON LISTENERS ---
+        document.getElementById('btn-start-race').addEventListener('click', () => startRace(true));
+        document.getElementById('btn-start-timetrial').addEventListener('click', () => startRace(false));
+        document.getElementById('btn-start-tour').addEventListener('click', () => jumpDroneToLandmark('center'));
+        document.getElementById('btn-track').addEventListener('click', () => toggleTrackMode());
+        document.getElementById('modal-track-floor').addEventListener('click', () => toggleTrackMode(0));
+        document.getElementById('modal-track-stunt').addEventListener('click', () => toggleTrackMode(1));
+        document.getElementById('btn-camera').addEventListener('click', cycleCamera);
+        document.getElementById('btn-tour').addEventListener('click', toggleDroneMode);
+        document.getElementById('btn-exit-drone').addEventListener('click', toggleDroneMode);
+        document.getElementById('btn-help').addEventListener('click', toggleHelpModal);
+        document.getElementById('btn-audio').addEventListener('click', toggleAudio);
+        document.getElementById('btn-download').addEventListener('click', downloadStandaloneHTML);
+        document.getElementById('btn-modal-download').addEventListener('click', downloadStandaloneHTML);
+
+        document.querySelectorAll('.spot-btn').forEach(btn => {
+            btn.addEventListener('click', () => jumpDroneToLandmark(btn.getAttribute('data-spot')));
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- MAIN ANIMATION LOOP ---
+        let lastTime = performance.now();
+
+        function animate(now = performance.now()) {
+            requestAnimationFrame(animate);
+            const dt = Math.min(0.05, (now - lastTime) / 1000);
+            lastTime = now;
+
+            // Animate scrolling glowing chevron racing line texture
+            chevronRibbonTex.offset.y -= dt * 2.2;
+
+            // Animate Lava Lamp blob
+            animatedProps.forEach(p => {
+                if (p.type === 'lava') {
+                    p.mesh.position.y = p.baseY + Math.sin(now * 0.0025) * 0.25;
+                }
+            });
+
+            if (gameState === 'racing') {
+                updateCarPhysics(dt, now);
+                updateCamera(dt);
+            } else if (gameState === 'drone') {
+                gpsArrowGroup.visible = false;
+                updateCamera(dt);
+            } else {
+                gpsArrowGroup.visible = false;
+                const angle = now * 0.00022;
+                camera.position.set(Math.sin(angle) * 19, 8.2, Math.cos(angle) * 21);
+                camera.lookAt(0, 2.5, 0);
+            }
+
+            updateHUD();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function () {
+            buildDSLOffice();
+            rebuildTrackVisuals();
+            buildBoostOrbs();
+            updateCheckpointGateHighlight();
+            if (player.bestLapMs > 0) {
+                document.getElementById('hud-best').textContent = formatTime(player.bestLapMs);
+            }
+            animate();
+        };
+    </script>
+</body>
+</html>
