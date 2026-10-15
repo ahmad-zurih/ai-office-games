@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Office Racer Showdown</title>
+  <meta name="description" content="Two browser car games set in our office, each vibe coded by a different AI from the same desk photos. Just for fun.">
+  <style>
+    :root {
+      --bg: #f6f5f1;
+      --card: #ffffff;
+      --text: #1d1d1f;
+      --muted: #5f5f66;
+      --border: #e2e0da;
+      --accent-claude: #c96442;
+      --accent-gemini: #3b6fd8;
+      --note-bg: #fff6d6;
+      --note-border: #ecd78a;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #16161a;
+        --card: #212127;
+        --text: #ececf1;
+        --muted: #a2a2ad;
+        --border: #34343c;
+        --accent-claude: #e08a6a;
+        --accent-gemini: #7da2f0;
+        --note-bg: #2e2914;
+        --note-border: #5c5022;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 48px 16px 64px;
+    }
+    h1 {
+      font-size: clamp(2rem, 5vw, 2.8rem);
+      line-height: 1.15;
+      margin: 0 0 12px;
+    }
+    .lede { color: var(--muted); font-size: 1.1rem; margin: 0 0 24px; }
+    .note {
+      background: var(--note-bg);
+      border: 1px solid var(--note-border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin: 0 0 36px;
+    }
+    .note strong { display: block; margin-bottom: 2px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      display: flex;
+      flex-direction: column;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-top: 5px solid var(--accent);
+      border-radius: 12px;
+      padding: 22px;
+      color: inherit;
+      text-decoration: none;
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .card:hover, .card:focus-visible {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 24px rgba(0,0,0,.12);
+      outline: none;
+    }
+    .card.claude { --accent: var(--accent-claude); }
+    .card.gemini { --accent: var(--accent-gemini); }
+    .tag {
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .card h2 { margin: 6px 0 8px; font-size: 1.4rem; }
+    .card p { color: var(--muted); margin: 0 0 18px; flex: 1; }
+    .play {
+      align-self: flex-start;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 999px;
+    }
+    @media (prefers-color-scheme: dark) { .play { color: #111; } }
+    footer { margin-top: 48px; color: var(--muted); font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>🏎️ Office Racer Showdown</h1>
+    <p class="lede">
+      I took a few photos around my desk and gave the same idea to two AI models:
+      build a tiny car racing game set in this office. These are the results.
+    </p>
+
+    <div class="note">
+      <strong>Just for fun.</strong>
+      This is a casual side experiment, not a benchmark, not a product, and not an official
+      project of any organisation. The code was vibe coded by AI, with no manual cleanup, so expect quirks.
+    </div>
+
+    <div class="grid">
+      <a class="card claude" href="claude/">
+        <span class="tag">Claude Opus 5.5</span>
+        <h2>DSL Grand Prix</h2>
+        <p>The version Anthropic's Claude Opus 5.5 built from the office photos.</p>
+        <span class="play">Play →</span>
+      </a>
+      <a class="card gemini" href="gemini/">
+        <span class="tag">Gemini 4</span>
+        <h2>DSL Micro GP</h2>
+        <p>The version Google's Gemini 4 built from the same photos and prompt.</p>
+        <span class="play">Play →</span>
+      </a>
+    </div>
+
+    <footer>
+      Works best on a desktop browser with a keyboard. Which one drove better? You decide.
+    </footer>
+  </main>
+</body>
+</html>
