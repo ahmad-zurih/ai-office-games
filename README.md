@@ -8,7 +8,7 @@ to build a small browser car game set in that office. Each one got the same phot
 | DSL Grand Prix | Claude Opus 5.5 | [`claude/`](claude/) |
 | DSL Micro GP | Gemini 4 | [`gemini/`](gemini/) |
 
-**Play online:** https://YOUR-USERNAME.github.io/ai-office-game/
+**Play online:** https://ahmad-zurih/ai-office-games/
 
 > ⚠️ This is a casual side project, not a benchmark or an official project of any organisation.
 > The code is AI-generated ("vibe coded") and published as-is.
